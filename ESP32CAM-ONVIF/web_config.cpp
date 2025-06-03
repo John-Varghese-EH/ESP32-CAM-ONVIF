@@ -2,6 +2,8 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include "rtsp_server.h"
+#include <FS.h>
+#include <SPIFFS.h> // or LittleFS.h
 
 WebServer webConfigServer(80);
 
@@ -17,7 +19,12 @@ void handle_root() {
 }
 
 void web_config_start() {
-  webConfigServer.on("/", HTTP_GET, handle_root);
+  if (!SPIFFS.begin(true)) {
+    Serial.println("SPIFFS/LittleFS Mount Failed");
+    return;
+  }
+  webConfigServer.serveStatic("/", SPIFFS, "/index.html").setDefaultFile("index.html");
+  // Optionally serve other assets (css, js) if you split them
   webConfigServer.begin();
   Serial.println("[INFO] Web config server started.");
 }
