@@ -42,12 +42,28 @@
   </section>
   <section id="panel-camera" class="panel" style="display:none">
     <h2>Camera Controls</h2>
+    <label>XCLK MHz
+      <select id="xclk" onchange="setConfig('xclk', this.value)">
+        <option value="10">10</option>
+        <option value="16">16</option>
+        <option value="20" selected>20</option>
+        <option value="40">40</option>
+      </select>
+    </label>
     <label>Resolution
       <select id="resolution" onchange="setConfig('resolution', this.value)">
-        <option value="VGA">VGA</option>
-        <option value="QVGA">QVGA</option>
-        <option value="CIF">CIF</option>
+        <option value="UXGA">UXGA (1600x1200)</option>
+        <option value="SXGA">SXGA (1280x1024)</option>
+        <option value="XGA">XGA (1024x768)</option>
+        <option value="SVGA">SVGA (800x600)</option>
+        <option value="VGA" selected>VGA (640x480)</option>
+        <option value="CIF">CIF (352x288)</option>
+        <option value="QVGA">QVGA (320x240)</option>
+        <option value="QQVGA">QQVGA (160x120)</option>
       </select>
+    </label>
+    <label>Quality
+      <input type="range" min="10" max="63" step="1" value="12" onchange="setConfig('quality', this.value)">
     </label>
     <label>Brightness
       <input type="range" min="-2" max="2" step="1" value="0" onchange="setConfig('brightness', this.value)">
@@ -55,8 +71,37 @@
     <label>Contrast
       <input type="range" min="-2" max="2" step="1" value="0" onchange="setConfig('contrast', this.value)">
     </label>
-    <button class="btn" onclick="setConfig('flip', 1)">Flip</button>
-    <button class="btn" onclick="setConfig('rotate', 1)">Rotate</button>
+    <label>Saturation
+      <input type="range" min="-2" max="2" step="1" value="0" onchange="setConfig('saturation', this.value)">
+    </label>
+    <label><input type="checkbox" onchange="setConfig('awb', this.checked ? 1 : 0)"> AWB</label>
+    <label><input type="checkbox" onchange="setConfig('awb_gain', this.checked ? 1 : 0)"> AWB Gain</label>
+    <label><input type="checkbox" onchange="setConfig('wb_mode', this.checked ? 1 : 0)"> WB Auto</label>
+    <label><input type="checkbox" onchange="setConfig('aec', this.checked ? 1 : 0)"> AEC Sensor</label>
+    <label><input type="checkbox" onchange="setConfig('aec2', this.checked ? 1 : 0)"> AEC DSP</label>
+    <label>AE Level
+      <input type="range" min="-2" max="2" step="1" value="0" onchange="setConfig('ae_level', this.value)">
+    </label>
+    <label><input type="checkbox" onchange="setConfig('agc', this.checked ? 1 : 0)"> AGC</label>
+    <label>Gain Ceiling
+      <select onchange="setConfig('gainceiling', this.value)">
+        <option value="0">2x</option>
+        <option value="1">4x</option>
+        <option value="2">8x</option>
+        <option value="3">16x</option>
+        <option value="4">32x</option>
+        <option value="5">64x</option>
+        <option value="6">128x</option>
+      </select>
+    </label>
+    <label><input type="checkbox" onchange="setConfig('bpc', this.checked ? 1 : 0)"> BPC</label>
+    <label><input type="checkbox" onchange="setConfig('wpc', this.checked ? 1 : 0)"> WPC</label>
+    <label><input type="checkbox" onchange="setConfig('raw_gma', this.checked ? 1 : 0)"> Raw GMA</label>
+    <label><input type="checkbox" onchange="setConfig('lenc', this.checked ? 1 : 0)"> Lens Correction</label>
+    <label><input type="checkbox" onchange="setConfig('hmirror', this.checked ? 1 : 0)"> H-Mirror</label>
+    <label><input type="checkbox" onchange="setConfig('vflip', this.checked ? 1 : 0)"> V-Flip</label>
+    <label><input type="checkbox" onclick="setConfig('rotate', 1)"> Rotate</label>
+    <label><input type="checkbox" onchange="setConfig('dcw', this.checked ? 1 : 0)"> DCW (Downsize EN)</label>
   </section>
   <section id="panel-sd" class="panel" style="display:none">
     <h2>SD Card Files</h2>
