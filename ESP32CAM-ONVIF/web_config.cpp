@@ -82,3 +82,7 @@ void web_config_start() {
     webConfigServer.begin();
     Serial.println("[INFO] Web config server started.");
 }
+
+void web_config_loop() {
+    webConfigServer.handleClient();
+}
