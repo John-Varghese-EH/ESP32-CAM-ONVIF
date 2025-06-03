@@ -1,6 +1,13 @@
 /*
-  ESP32CAM-ONVIF
-  ONVIF + RTSP + WebConfig + SD + Motion Detection Camera Firmware
+  ESP32-CAM Advanced ONVIF + RTSP + WebConfig + SD + Motion Detection
+
+  Features:
+  - ONVIF WS-Discovery responder + minimal SOAP device service
+  - RTSP MJPEG streaming on port 554
+  - Basic web server on port 80 for configuration placeholder
+  - SD card initialization for recording (expand as needed)
+  - Basic motion detection stub
+  
   Made with ❤️ by J0X
 */
 
