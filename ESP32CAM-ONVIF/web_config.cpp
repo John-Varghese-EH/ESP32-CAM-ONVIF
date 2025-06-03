@@ -55,17 +55,40 @@ void web_config_start() {
             return;
         }
         sensor_t * s = esp_camera_sensor_get();
-        if (doc.containsKey("brightness")) s->set_brightness(s, doc["brightness"]);
-        if (doc.containsKey("contrast"))   s->set_contrast(s, doc["contrast"]);
-        if (doc.containsKey("saturation")) s->set_saturation(s, doc["saturation"]);
-        if (doc.containsKey("flip"))       s->set_vflip(s, doc["flip"] ? 1 : 0);
-        if (doc.containsKey("rotate"))     s->set_hmirror(s, doc["rotate"] ? 1 : 0);
+        if (doc.containsKey("xclk")) {
+            // To change xclk, you must re-init the camera. Not recommended at runtime.
+            // Save to config and apply on reboot if needed.
+        }
         if (doc.containsKey("resolution")) {
             String res = doc["resolution"].as<String>();
-            if (res == "VGA")       s->set_framesize(s, FRAMESIZE_VGA);
-            else if (res == "QVGA") s->set_framesize(s, FRAMESIZE_QVGA);
+            if (res == "UXGA")      s->set_framesize(s, FRAMESIZE_UXGA);
+            else if (res == "SXGA") s->set_framesize(s, FRAMESIZE_SXGA);
+            else if (res == "XGA")  s->set_framesize(s, FRAMESIZE_XGA);
+            else if (res == "SVGA") s->set_framesize(s, FRAMESIZE_SVGA);
+            else if (res == "VGA")  s->set_framesize(s, FRAMESIZE_VGA);
             else if (res == "CIF")  s->set_framesize(s, FRAMESIZE_CIF);
+            else if (res == "QVGA") s->set_framesize(s, FRAMESIZE_QVGA);
+            else if (res == "QQVGA")s->set_framesize(s, FRAMESIZE_QQVGA);
         }
+        if (doc.containsKey("quality"))     s->set_quality(s, doc["quality"]);
+        if (doc.containsKey("brightness"))  s->set_brightness(s, doc["brightness"]);
+        if (doc.containsKey("contrast"))    s->set_contrast(s, doc["contrast"]);
+        if (doc.containsKey("saturation"))  s->set_saturation(s, doc["saturation"]);
+        if (doc.containsKey("awb"))         s->set_whitebal(s, doc["awb"]);
+        if (doc.containsKey("awb_gain"))    s->set_awb_gain(s, doc["awb_gain"]);
+        if (doc.containsKey("wb_mode"))     s->set_wb_mode(s, doc["wb_mode"]);
+        if (doc.containsKey("aec"))         s->set_aec(s, doc["aec"]);
+        if (doc.containsKey("aec2"))        s->set_aec2(s, doc["aec2"]);
+        if (doc.containsKey("ae_level"))    s->set_ae_level(s, doc["ae_level"]);
+        if (doc.containsKey("agc"))         s->set_agc(s, doc["agc"]);
+        if (doc.containsKey("gainceiling")) s->set_gainceiling(s, doc["gainceiling"]);
+        if (doc.containsKey("bpc"))         s->set_bpc(s, doc["bpc"]);
+        if (doc.containsKey("wpc"))         s->set_wpc(s, doc["wpc"]);
+        if (doc.containsKey("raw_gma"))     s->set_raw_gma(s, doc["raw_gma"]);
+        if (doc.containsKey("lenc"))        s->set_lenc(s, doc["lenc"]);
+        if (doc.containsKey("hmirror"))     s->set_hmirror(s, doc["hmirror"]);
+        if (doc.containsKey("vflip"))       s->set_vflip(s, doc["vflip"]);
+        if (doc.containsKey("dcw"))         s->set_dcw(s, doc["dcw"]);
         webConfigServer.send(200, "application/json", "{\"ok\":1}");
     });
 
