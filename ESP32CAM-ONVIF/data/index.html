@@ -2,108 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ESP32CAM-ONVIF Control Panel</title>
+  <title>J0X-ESP-CAM Control Panel</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #2b2b2b; color: #eee; }
-    header { background: #181818; padding: 1em; text-align: center; }
-    h1 { margin: 0.2em 0; }
-    main { max-width: 700px; margin: 2em auto; background: #232323; border-radius: 8px; padding: 2em; box-shadow: 0 2px 8px #0008; }
-    .section { margin-bottom: 2em; }
-    label { display: block; margin: 0.5em 0 0.2em; }
-    input, select, button { padding: 0.5em; border-radius: 4px; border: none; margin-bottom: 0.5em; }
-    .video-preview { width: 100%; max-width: 480px; border-radius: 6px; background: #111; }
-    .btn { background: #08f; color: #fff; cursor: pointer; }
-    .btn:active { background: #06c; }
-    .footer { margin-top: 2em; text-align: center; color: #aaa; font-size: 1em; }
-    .status { font-size: 1em; margin-bottom: 1em; }
-    @media (max-width: 600px) {
-      main { padding: 1em; }
-      h1 { font-size: 1.2em; }
-    }
-  </style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <div id="login-overlay" class="overlay">
+    <div class="login-box">
+      <img src="/logo.png" alt="Logo" class="logo-large">
+      <h2>J0X-ESP-CAM</h2>
+      <form id="login-form" onsubmit="return login(event)">
+        <input type="text" id="username" placeholder="Username" autocomplete="username" required>
+        <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
+        <button type="submit" class="btn">Login</button>
+        <div id="login-error" class="error"></div>
+      </form>
+    </div>
+  </div>
   <header>
-    <h1>ESP32CAM-ONVIF Control Panel</h1>
+    <div class="header-bar">
+      <img src="/logo.png" alt="Logo" class="logo-small">
+      <span class="brand">J0X-ESP-CAM</span>
+    </div>
     <div class="status" id="status">Connecting...</div>
   </header>
   <main>
-    <div class="section">
-      <h2>Live Preview</h2>
-      <img id="preview" class="video-preview" src="/stream" alt="Live Stream">
-      <div>
-        <button class="btn" onclick="snapshot()">Snapshot</button>
-      </div>
+  <nav class="tabs">
+    <button class="tab-btn active" onclick="showPanel('live')">Live</button>
+    <button class="tab-btn" onclick="showPanel('camera')">Camera</button>
+    <button class="tab-btn" onclick="showPanel('sd')">SD Card</button>
+    <button class="tab-btn" onclick="showPanel('system')">System</button>
+  </nav>
+  <section id="panel-live" class="panel">
+    <h2>Live Preview</h2>
+    <img id="preview" class="video-preview" src="/stream" alt="Live Stream">
+    <div>
+      <button class="btn" onclick="snapshot()">Snapshot</button>
     </div>
-    <div class="section">
-      <h2>Camera Controls</h2>
-      <label>Resolution
-        <select id="resolution" onchange="setConfig('resolution', this.value)">
-          <option value="VGA">VGA</option>
-          <option value="QVGA">QVGA</option>
-          <option value="CIF">CIF</option>
-        </select>
-      </label>
-      <label>Brightness
-        <input type="range" min="-2" max="2" step="1" value="0" onchange="setConfig('brightness', this.value)">
-      </label>
-      <label>Contrast
-        <input type="range" min="-2" max="2" step="1" value="0" onchange="setConfig('contrast', this.value)">
-      </label>
-      <button class="btn" onclick="setConfig('flip', 1)">Flip</button>
-      <button class="btn" onclick="setConfig('rotate', 1)">Rotate</button>
+  </section>
+  <section id="panel-camera" class="panel" style="display:none">
+    <h2>Camera Controls</h2>
+    <label>Resolution
+      <select id="resolution" onchange="setConfig('resolution', this.value)">
+        <option value="VGA">VGA</option>
+        <option value="QVGA">QVGA</option>
+        <option value="CIF">CIF</option>
+      </select>
+    </label>
+    <label>Brightness
+      <input type="range" min="-2" max="2" step="1" value="0" onchange="setConfig('brightness', this.value)">
+    </label>
+    <label>Contrast
+      <input type="range" min="-2" max="2" step="1" value="0" onchange="setConfig('contrast', this.value)">
+    </label>
+    <button class="btn" onclick="setConfig('flip', 1)">Flip</button>
+    <button class="btn" onclick="setConfig('rotate', 1)">Rotate</button>
+  </section>
+  <section id="panel-sd" class="panel" style="display:none">
+    <h2>SD Card Files</h2>
+    <div>
+      <button class="btn" onclick="refreshSD()">Refresh</button>
     </div>
-    <div class="section">
-      <h2>Recording & Motion</h2>
-      <button class="btn" onclick="toggleRecording()">Start/Stop Recording</button>
-      <div id="motionStatus">Motion: Unknown</div>
-    </div>
-    <div class="section">
-      <h2>Network & System</h2>
-      <div>RTSP URL: <span id="rtspUrl"></span></div>
-      <div>ONVIF Service: <span id="onvifUrl"></span></div>
-      <button class="btn" onclick="reboot()">Reboot</button>
-      <button class="btn" onclick="factoryReset()">Factory Reset</button>
-    </div>
-  </main>
+    <table id="sd-table">
+      <thead>
+        <tr><th>File Name</th><th>Size</th><th>Action</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+  <section id="panel-system" class="panel" style="display:none">
+    <h2>Network & System</h2>
+    <div>RTSP URL: <span id="rtspUrl"></span></div>
+    <div>ONVIF Service: <span id="onvifUrl"></span></div>
+    <button class="btn" onclick="reboot()">Reboot</button>
+    <button class="btn" onclick="factoryReset()">Factory Reset</button>
+    <div id="motionStatus">Motion: Unknown</div>
+  </section>
+</main>
   <div class="footer">
-    Made with <span style="color:#e25555;">&#10084;&#65039;</span> by J0X
+    Made with <span style="color:#e25555;">&#10084;&#65039;</span> by <a herf="https://github.com/John-Varghese-EH/">J0X</a>
   </div>
-  <script>
-    function updateStatus() {
-      fetch('/api/status').then(r => r.json()).then(data => {
-        document.getElementById('status').textContent = data.status || 'Online';
-        document.getElementById('rtspUrl').textContent = data.rtsp || '';
-        document.getElementById('onvifUrl').textContent = data.onvif || '';
-        document.getElementById('motionStatus').textContent = "Motion: " + (data.motion ? "Detected" : "None");
-      }).catch(() => {
-        document.getElementById('status').textContent = 'Offline';
-      });
-    }
-    function setConfig(key, value) {
-      fetch('/api/config', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({[key]: value})
-      }).then(updateStatus);
-    }
-    function snapshot() {
-      window.open('/snapshot', '_blank');
-    }
-    function toggleRecording() {
-      fetch('/api/record', {method: 'POST'}).then(updateStatus);
-    }
-    function reboot() {
-      fetch('/api/reboot', {method: 'POST'});
-      alert("Rebooting...");
-    }
-    function factoryReset() {
-      fetch('/api/factory_reset', {method: 'POST'});
-      alert("Factory reset initiated.");
-    }
-    setInterval(updateStatus, 2000);
-    updateStatus();
-  </script>
+  <script src="/app.js"></script>
 </body>
 </html>
