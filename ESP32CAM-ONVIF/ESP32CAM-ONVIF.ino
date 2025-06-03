@@ -17,7 +17,7 @@
 #include "web_config.h"
 #include "sd_recorder.h"
 #include "motion_detection.h"
-#include "utils.h"
+#include "config.h"
 
 void setup() {
   Serial.begin(115200);
