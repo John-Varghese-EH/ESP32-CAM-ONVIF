@@ -1,0 +1,33 @@
+body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #2b2b2b; color: #eee; }
+header { background: #181818; padding: 0.5em 0 0 0; text-align: left; }
+.header-bar { display: flex; align-items: center; padding: 0.5em 1em; }
+.logo-small { height: 36px; margin-right: 12px; }
+.brand { font-size: 1.5em; font-weight: bold; letter-spacing: 1px; color: #08f; }
+h1, h2 { margin: 0.2em 0; }
+main { max-width: 700px; margin: 2em auto; background: #232323; border-radius: 8px; padding: 2em; box-shadow: 0 2px 8px #0008; }
+.section { margin-bottom: 2em; }
+label { display: block; margin: 0.5em 0 0.2em; }
+input, select, button { padding: 0.5em; border-radius: 4px; border: none; margin-bottom: 0.5em; }
+.video-preview { width: 100%; max-width: 480px; border-radius: 6px; background: #111; }
+.btn { background: #08f; color: #fff; cursor: pointer; transition: background 0.2s; }
+.btn:active { background: #06c; }
+.footer { margin-top: 2em; text-align: center; color: #aaa; font-size: 1em; }
+.status { font-size: 1em; margin: 0.5em 1em 1em 1em; }
+.overlay {
+  position: fixed; z-index: 1000; left: 0; top: 0; width: 100vw; height: 100vh;
+  background: rgba(30,30,30,0.95); display: flex; align-items: center; justify-content: center;
+}
+.login-box {
+  background: #232323; padding: 2em 2em 1em 2em; border-radius: 10px; box-shadow: 0 2px 16px #000c;
+  display: flex; flex-direction: column; align-items: center;
+}
+.logo-large { width: 90px; height: 90px; margin-bottom: 1em; border-radius: 16px; }
+#login-form { display: flex; flex-direction: column; width: 220px; }
+#login-form input { margin-bottom: 1em; font-size: 1em; }
+#login-form .btn { font-size: 1.1em; }
+.error { color: #f55; font-size: 0.95em; min-height: 1.5em; text-align: center; }
+@media (max-width: 600px) {
+  main { padding: 1em; }
+  h1, .brand { font-size: 1.1em; }
+  .login-box { padding: 1em; }
+}
