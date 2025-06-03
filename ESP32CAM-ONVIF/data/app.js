@@ -110,3 +110,75 @@ function factoryReset() {
 }
 setInterval(updateStatus, 2000);
 updateStatus();
+
+// --- zoom-pan-live-view ---
+const preview = document.getElementById('preview');
+let scale = 1, panX = 0, panY = 0, lastScale = 1, lastPanX = 0, lastPanY = 0, startDist = 0, isDragging = false, dragStartX = 0, dragStartY = 0;
+function update() {
+  preview.style.transform = `scale(${scale}) translate(${panX/scale}px,${panY/scale}px)`;
+}
+
+// Pinch-to-zoom and pan (touch)
+preview.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    startDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    lastScale = scale;
+  } else if (e.touches.length === 1 && scale > 1) {
+    isDragging = true;
+    dragStartX = e.touches[0].clientX - lastPanX;
+    dragStartY = e.touches[0].clientY - lastPanY;
+  }
+}, {passive:false});
+
+preview.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    let newDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    scale = Math.max(1, Math.min(4, lastScale * newDist / startDist));
+    update();
+  } else if (e.touches.length === 1 && isDragging && scale > 1) {
+    e.preventDefault();
+    panX = e.touches[0].clientX - dragStartX;
+    panY = e.touches[0].clientY - dragStartY;
+    update();
+  }
+}, {passive:false});
+
+preview.addEventListener('touchend', e => {
+  if (e.touches.length < 2) {
+    lastScale = scale; lastPanX = panX; lastPanY = panY; isDragging = false;
+  }
+}, {passive:false});
+
+// Scroll-to-zoom (desktop)
+preview.addEventListener('wheel', e => {
+  e.preventDefault();
+  let delta = e.deltaY < 0 ? 0.1 : -0.1;
+  let newScale = Math.max(1, Math.min(4, scale + delta));
+  // Optional: zoom towards mouse pointer
+  if (newScale !== scale) {
+    let rect = preview.getBoundingClientRect();
+    let mx = e.clientX - rect.left - rect.width / 2, my = e.clientY - rect.top - rect.height / 2;
+    panX = (panX - mx) * (newScale / scale) + mx;
+    panY = (panY - my) * (newScale / scale) + my;
+    scale = newScale; lastScale = scale; update();
+  }
+}, {passive:false});
+
+// Pan with mouse drag (desktop)
+preview.addEventListener('mousedown', e => {
+  if (scale > 1) { isDragging = true; dragStartX = e.clientX - lastPanX; dragStartY = e.clientY - lastPanY; preview.style.cursor = "grabbing"; }
+});
+window.addEventListener('mousemove', e => {
+  if (isDragging && scale > 1) { panX = e.clientX - dragStartX; panY = e.clientY - dragStartY; update(); }
+});
+window.addEventListener('mouseup', e => {
+  if (isDragging) { isDragging = false; lastPanX = panX; lastPanY = panY; preview.style.cursor = "grab"; }
+});
