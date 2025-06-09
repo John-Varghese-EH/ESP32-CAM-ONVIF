@@ -1,9 +1,9 @@
 #include "web_config.h"
 #include <WebServer.h>
 #include <WiFi.h>
-#include "rtsp_server.h"       // For getRTSPUrl()
-#include "onvif_server.h"      // For ONVIF URL if needed
-#include "motion_detection.h"  // For motion_detected()
+#include "rtsp_server.h"
+#include "onvif_server.h"
+#include "motion_detection.h"
 #include <FS.h>
 #include <SPIFFS.h>
 #include <SD_MMC.h>
@@ -12,7 +12,6 @@
 
 WebServer webConfigServer(80);
 
-// --- Helper: HTTP Basic Auth ---
 const char* WEB_USER = "admin";
 const char* WEB_PASS = "esp123";
 
@@ -25,17 +24,36 @@ bool isAuthenticated(WebServer &server) {
 }
 
 void web_config_start() {
-    // Mount SPIFFS for static files
     if (!SPIFFS.begin(true)) {
         Serial.println("SPIFFS/LittleFS Mount Failed");
         return;
     }
-    // Protect static files with authentication
-    webConfigServer.serveStatic("/", SPIFFS, "/");
-    webConfigServer.setDefaultFile("index.html");
-    webConfigServer.setAuthentication(WEB_USER, WEB_PASS);
 
-    // === API ENDPOINTS ===
+    // All route definitions go here, inside this function!
+    webConfigServer.on("/", []() {
+        File file = SPIFFS.open("/index.html", "r");
+        if (!file) {
+            webConfigServer.send(404, "text/plain", "File not found");
+            return;
+        }
+        webConfigServer.streamFile(file, "text/html");
+        file.close();
+    });
+
+    webConfigServer.on("/", HTTP_GET, []() {
+        if (!webConfigServer.authenticate(WEB_USER, WEB_PASS)) {
+            return webConfigServer.requestAuthentication();
+        }
+        File file = SPIFFS.open("/index.html", "r");
+        if (!file) {
+            webConfigServer.send(404, "text/plain", "File not found");
+            return;
+        }
+        webConfigServer.streamFile(file, "text/html");
+        file.close();
+    });
+
+    // --- API ENDPOINTS ---
     webConfigServer.on("/api/status", HTTP_GET, []() {
         if (!isAuthenticated(webConfigServer)) return;
         String json = "{";
@@ -200,9 +218,9 @@ void web_config_start() {
     });
 
     webConfigServer.begin();
-    Serial.println("[INFO] Web config server started.");
-}
+        Serial.println("[INFO] Web config server started.");
+    }
 
-void web_config_loop() {
-    webConfigServer.handleClient();
-}
+    void web_config_loop() {
+        webConfigServer.handleClient();
+    }
