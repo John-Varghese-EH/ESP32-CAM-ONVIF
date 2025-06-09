@@ -43,6 +43,25 @@ String getDeviceInfoResponse() {
     "</SOAP-ENV:Envelope>";
 }
 
+String getStreamUriResponse() {
+  String ip = WiFi.localIP().toString();
+  return
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\">"
+    "<SOAP-ENV:Body>"
+    "<trt:GetStreamUriResponse>"
+    "<trt:MediaUri>"
+    "<tt:Uri>rtsp://" + ip + ":554/mjpeg/1</tt:Uri>"
+    "<tt:InvalidAfterConnect>false</tt:InvalidAfterConnect>"
+    "<tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>"
+    "<tt:Timeout>PT0S</tt:Timeout>"
+    "</trt:MediaUri>"
+    "</trt:GetStreamUriResponse>"
+    "</SOAP-ENV:Body>"
+    "</SOAP-ENV:Envelope>";
+}
+
 void handle_onvif_soap() {
   String req = onvifServer.arg(0);
   if (req.indexOf("GetCapabilities") > 0) {
@@ -93,7 +112,7 @@ void handle_onvif_discovery() {
 void onvif_server_start() {
   onvifServer.on("/onvif/device_service", HTTP_POST, handle_onvif_soap);
   onvifServer.begin();
-  onvifUDP.beginMulticast(WiFi.localIP(), IPAddress(239,255,255,250), 3702);
+  onvifUDP.beginMulticast(IPAddress(239,255,255,250), 3702); // Fixed: use only 2 args
   Serial.println("[INFO] ONVIF server started.");
 }
 

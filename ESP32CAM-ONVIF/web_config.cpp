@@ -31,7 +31,9 @@ void web_config_start() {
         return;
     }
     // Protect static files with authentication
-    webConfigServer.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html").setAuthentication(WEB_USER, WEB_PASS);
+    webConfigServer.serveStatic("/", SPIFFS, "/");
+    webConfigServer.setDefaultFile("index.html");
+    webConfigServer.setAuthentication(WEB_USER, WEB_PASS);
 
     // === API ENDPOINTS ===
     webConfigServer.on("/api/status", HTTP_GET, []() {
@@ -77,10 +79,10 @@ void web_config_start() {
         if (doc.containsKey("awb"))         s->set_whitebal(s, doc["awb"]);
         if (doc.containsKey("awb_gain"))    s->set_awb_gain(s, doc["awb_gain"]);
         if (doc.containsKey("wb_mode"))     s->set_wb_mode(s, doc["wb_mode"]);
-        if (doc.containsKey("aec"))         s->set_aec(s, doc["aec"]);
+        if (doc.containsKey("aec"))         s->set_aec2(s, doc["aec"]);
         if (doc.containsKey("aec2"))        s->set_aec2(s, doc["aec2"]);
         if (doc.containsKey("ae_level"))    s->set_ae_level(s, doc["ae_level"]);
-        if (doc.containsKey("agc"))         s->set_agc(s, doc["agc"]);
+        if (doc.containsKey("agc"))         s->set_gain_ctrl(s, doc["agc"]);
         if (doc.containsKey("gainceiling")) s->set_gainceiling(s, doc["gainceiling"]);
         if (doc.containsKey("bpc"))         s->set_bpc(s, doc["bpc"]);
         if (doc.containsKey("wpc"))         s->set_wpc(s, doc["wpc"]);
