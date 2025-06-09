@@ -1,8 +1,9 @@
+#include <Arduino.h>
 #include "onvif_server.h"
 #include "rtsp_server.h"
 #include <WiFiUdp.h>
 #include <WebServer.h>
-#include "utils.h"
+#include "config.h"
 
 WebServer onvifServer(8000);
 WiFiUDP onvifUDP;
