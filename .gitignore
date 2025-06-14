@@ -20,7 +20,6 @@
 .pioenvs/
 .piolibdeps/
 .clangd/
-.clangd/
 *.sublime-workspace
 *.sublime-project
 
@@ -46,3 +45,19 @@ Thumbs.db
 
 # Backup files
 *~
+
+# Certificates and keys
+*.pem
+*.crt
+*.key
+*.csr
+
+# Credentials and secrets
+secrets.h
+credentials.h
+.env
+
+# Camera-specific files
+*.jpg.tmp
+*.mjpeg.tmp
+frame_*.jpg
