@@ -2,7 +2,7 @@
 
 A professional firmware implementation for ESP32-CAM that provides ONVIF compatibility, RTSP streaming, and a web-based configuration interface with WiFi network scanning capabilities.
 
-![ESP32-CAM](https://esphome.io/_images/ESP32-CAM_board.jpg)
+![ESP32-CAM+ONVIF](ESP32-CAM+ONVIF.webp)
 
 ## Features
 
