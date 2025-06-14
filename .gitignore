@@ -1,0 +1,48 @@
+# Arduino/ESP32 build files
+*.elf
+*.bin
+*.hex
+*.map
+*.d
+*.o
+*.a
+*.pyc
+*.pyo
+*.pyd
+*.swp
+
+# VSCode settings
+.vscode/
+*.code-workspace
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+.clangd/
+.clangd/
+*.sublime-workspace
+*.sublime-project
+
+# Arduino IDE
+*.ino.*
+*.cpp.*
+*.h.*
+*.bak
+
+# SPIFFS/FS images
+spiffs.bin
+data.bin
+
+# SD card images
+*.img
+
+# Mac/Windows system files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backup files
+*~
