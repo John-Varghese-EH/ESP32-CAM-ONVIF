@@ -1,4 +1,5 @@
 body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #2b2b2b; color: #eee; }
+.section-content { margin: 1em 0; }
 header { background: #181818; padding: 0.5em 0 0 0; text-align: left; }
 .header-bar { display: flex; align-items: center; padding: 0.5em 1em; }
 .logo-small { height: 36px; margin-right: 12px; }
@@ -22,10 +23,10 @@ input, select, button { padding: 0.5em; border-radius: 4px; border: none; margin
 .tab-btn { background: none; border: none; color: #aaa; font-size: 1.1em; padding: 0.7em 1.2em; cursor: pointer; transition: color 0.2s; }
 .tab-btn.active, .tab-btn:hover { color: #08f; border-bottom: 2px solid #08f; }
 .panel { display: block; }
-#sd-table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-#sd-table th, #sd-table td { border: 1px solid #333; padding: 0.5em; }
-#sd-table th { background: #181818; }
-#sd-table tr:nth-child(even) { background: #292929; }
+#sd-table, #wifi-table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+#sd-table th, #sd-table td, #wifi-table th, #wifi-table td { border: 1px solid #333; padding: 0.5em; }
+#sd-table th, #wifi-table th { background: #181818; }
+#sd-table tr:nth-child(even), #wifi-table tr:nth-child(even) { background: #292929; }
 .login-box {
   background: #232323; padding: 2em 2em 1em 2em; border-radius: 10px; box-shadow: 0 2px 16px #000c;
   display: flex; flex-direction: column; align-items: center;
@@ -35,8 +36,20 @@ input, select, button { padding: 0.5em; border-radius: 4px; border: none; margin
 #login-form input { margin-bottom: 1em; font-size: 1em; }
 #login-form .btn { font-size: 1.1em; }
 .error { color: #f55; font-size: 0.95em; min-height: 1.5em; text-align: center; }
+.current-wifi { margin-bottom: 1.5em; }
+.current-wifi h3, .wifi-actions h3, #networks-list h3, #connect-form h3 { margin-top: 1em; margin-bottom: 0.5em; color: #08f; }
+
+.wifi-actions { margin: 1.2em 0; }
+#scan-status { margin-top: 0.5em; font-style: italic; color: #aaa; }
+
+#wifi-form { display: flex; flex-direction: column; max-width: 300px; }
+#wifi-form input { margin-bottom: 0.8em; padding: 0.5em; }
+#wifi-form button { align-self: flex-start; }
+
 @media (max-width: 600px) {
   main { padding: 1em; }
   h1, .brand { font-size: 1.1em; }
   .login-box { padding: 1em; }
+  
+  #wifi-form { max-width: 100%; }
 }

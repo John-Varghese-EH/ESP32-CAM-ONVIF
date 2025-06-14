@@ -18,17 +18,35 @@
 #include "sd_recorder.h"
 #include "motion_detection.h"
 #include "config.h"
+#include "wifi_manager.h"
 
 void setup() {
   Serial.begin(115200);
   printBanner();
+  
+  // Initialize camera
   if (!camera_init()) fatalError("Camera init failed!");
-  if (!wifi_connect()) fatalError("WiFi connect failed!");
+  
+  // Initialize WiFi - try stored credentials first, fallback to AP mode
+  bool wifiConnected = wifiManager.begin();
+  
+  // Start web server (works in both AP and STA mode)
   web_config_start();
-  rtsp_server_start();
-  onvif_server_start();
+  
+  // Only start these services if we're connected to a network
+  if (wifiConnected) {
+    rtsp_server_start();
+    onvif_server_start();
+  } else {
+    Serial.println("[INFO] WiFi not connected. RTSP and ONVIF services not started.");
+    Serial.println("[INFO] Connect to AP network: " + wifiManager.getSSID());
+    Serial.println("[INFO] Browse to: http://" + wifiManager.getLocalIP().toString());
+  }
+  
+  // Initialize other services
   sd_recorder_init();
   motion_detection_init();
+  
   Serial.println("[INFO] Setup complete. System running.");
 }
 

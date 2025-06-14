@@ -73,12 +73,95 @@ function deleteSD(filename) {
 }
 
 // --- UI Logic ---
+// --- WiFi Management ---
+function scanWiFi() {
+  document.getElementById('scan-status').textContent = "Scanning...";
+  document.getElementById('networks-list').style.display = 'none';
+  document.getElementById('connect-form').style.display = 'none';
+  
+  api('/api/wifi/scan').then(r => r.json()).then(data => {
+    const tbody = document.querySelector('#wifi-table tbody');
+    tbody.innerHTML = '';
+    
+    if (data.networks && data.networks.length > 0) {
+      data.networks.forEach(network => {
+        const tr = document.createElement('tr');
+        // Signal strength indicator
+        const signalStrength = Math.min(100, Math.max(0, 2 * (network.rssi + 100)));
+        const signalIcon = signalStrength > 70 ? '📶' : signalStrength > 40 ? '📶' : '📶';
+        
+        // Security type
+        const security = network.encType > 0 ? '🔒' : '';
+        
+        tr.innerHTML = `
+          <td>${network.ssid}</td>
+          <td>${signalIcon} ${signalStrength}%</td>
+          <td>${security}</td>
+          <td><button class="btn" onclick="selectNetwork('${network.ssid}')">Connect</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      
+      document.getElementById('networks-list').style.display = '';
+      document.getElementById('scan-status').textContent = `Found ${data.networks.length} networks`;
+    } else {
+      document.getElementById('scan-status').textContent = "No networks found";
+    }
+  }).catch(err => {
+    document.getElementById('scan-status').textContent = "Scan failed: " + err.message;
+  });
+}
+
+function selectNetwork(ssid) {
+  document.getElementById('wifi-connect-ssid').value = ssid;
+  document.getElementById('wifi-connect-password').value = '';
+  document.getElementById('connect-form').style.display = '';
+}
+
+function connectWiFi(e) {
+  e.preventDefault();
+  
+  const ssid = document.getElementById('wifi-connect-ssid').value;
+  const password = document.getElementById('wifi-connect-password').value;
+  
+  api('/api/wifi/connect', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ssid, password})
+  }).then(r => r.json()).then(data => {
+    if (data.success) {
+      alert(`Connecting to ${ssid}. The device will restart if connection is successful.`);
+    } else {
+      alert(`Failed to connect: ${data.message}`);
+    }
+  }).catch(err => {
+    alert("Connection error: " + err.message);
+  });
+  
+  return false;
+}
+
+function updateWiFiStatus() {
+  api('/api/wifi/status').then(r => r.json()).then(data => {
+    document.getElementById('wifi-status').textContent = data.connected ? "Connected" : "Disconnected";
+    document.getElementById('wifi-ssid').textContent = data.ssid || "-";
+    document.getElementById('wifi-ip').textContent = data.ip || "-";
+  }).catch(err => {
+    console.error("Error getting WiFi status:", err);
+  });
+}
+
 function updateStatus() {
   api('/api/status').then(r => r.json()).then(data => {
     document.getElementById('status').textContent = data.status || 'Online';
     document.getElementById('rtspUrl').textContent = data.rtsp || '';
     document.getElementById('onvifUrl').textContent = data.onvif || '';
     document.getElementById('motionStatus').textContent = "Motion: " + (data.motion ? "Detected" : "None");
+    
+    // Update WiFi status if on WiFi tab
+    if (document.getElementById('panel-wifi').style.display !== 'none') {
+      updateWiFiStatus();
+    }
   }).catch(() => {
     document.getElementById('status').textContent = 'Offline';
     if (!document.getElementById("login-overlay").style.display || document.getElementById("login-overlay").style.display === "none") {
@@ -108,8 +191,25 @@ function factoryReset() {
   api('/api/factory_reset', {method: 'POST'});
   alert("Factory reset initiated.");
 }
-setInterval(updateStatus, 2000);
+// Update status every 2 seconds, and WiFi status if on that tab
+setInterval(() => {
+  updateStatus();
+}, 2000);
+
+// Initial updates
 updateStatus();
+
+// Add panel-specific handlers
+function showPanel(panel) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(sec => sec.style.display = 'none');
+  document.querySelector('.tab-btn[onclick="showPanel(\''+panel+'\')"]').classList.add('active');
+  document.getElementById('panel-' + panel).style.display = '';
+  
+  // Panel-specific init
+  if (panel === 'sd') refreshSD();
+  if (panel === 'wifi') updateWiFiStatus();
+}
 
 // --- zoom-pan-live-view ---
 const preview = document.getElementById('preview');

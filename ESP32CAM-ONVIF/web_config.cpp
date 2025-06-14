@@ -9,6 +9,7 @@
 #include <SD_MMC.h>
 #include <ArduinoJson.h>
 #include "esp_camera.h"
+#include "wifi_manager.h"
 
 WebServer webConfigServer(80);
 
@@ -25,7 +26,7 @@ bool isAuthenticated(WebServer &server) {
 
 void web_config_start() {
     if (!SPIFFS.begin(true)) {
-        Serial.println("SPIFFS/LittleFS Mount Failed");
+        Serial.println("[ERROR] SPIFFS/LittleFS Mount Failed");
         return;
     }
 
@@ -183,6 +184,73 @@ void web_config_start() {
         // Reset settings logic here
         webConfigServer.send(200, "application/json", "{\"ok\":1}");
         ESP.restart();
+    });
+    
+    // --- WiFi API Endpoints ---
+    webConfigServer.on("/api/wifi/status", HTTP_GET, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        
+        String json = "{";
+        json += "\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
+        json += "\"ssid\":\"" + wifiManager.getSSID() + "\",";
+        json += "\"ip\":\"" + wifiManager.getLocalIP().toString() + "\",";
+        json += "\"mode\":\"" + String(wifiManager.isInAPMode() ? "AP" : "STA") + "\"";
+        json += "}";
+        
+        webConfigServer.send(200, "application/json", json);
+    });
+    
+    webConfigServer.on("/api/wifi/scan", HTTP_GET, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        
+        int networksFound = wifiManager.scanNetworks();
+        WiFiNetwork* networks = wifiManager.getScannedNetworks();
+        
+        String json = "{\"networks\":[";
+        for (int i = 0; i < networksFound; i++) {
+            if (i > 0) json += ",";
+            json += "{";
+            json += "\"ssid\":\"" + networks[i].ssid + "\",";
+            json += "\"rssi\":" + String(networks[i].rssi) + ",";
+            json += "\"encType\":" + String(networks[i].encType);
+            json += "}";
+        }
+        json += "]}";
+        
+        webConfigServer.send(200, "application/json", json);
+    });
+    
+    webConfigServer.on("/api/wifi/connect", HTTP_POST, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        
+        StaticJsonDocument<256> doc;
+        DeserializationError err = deserializeJson(doc, webConfigServer.arg("plain"));
+        
+        if (err || !doc.containsKey("ssid") || !doc.containsKey("password")) {
+            webConfigServer.send(400, "application/json", "{\"success\":false,\"message\":\"Invalid request\"}");
+            return;
+        }
+        
+        String ssid = doc["ssid"].as<String>();
+        String password = doc["password"].as<String>();
+        
+        // Save credentials
+        if (wifiManager.saveCredentials(ssid, password)) {
+            // Try to connect
+            bool connected = wifiManager.connectToNetwork(ssid, password);
+            
+            if (connected) {
+                webConfigServer.send(200, "application/json", "{\"success\":true,\"message\":\"Connected\"}");
+                
+                // Optional: schedule a restart after a short delay to ensure response is sent
+                delay(1000);
+                ESP.restart();
+            } else {
+                webConfigServer.send(200, "application/json", "{\"success\":false,\"message\":\"Failed to connect\"}");
+            }
+        } else {
+            webConfigServer.send(500, "application/json", "{\"success\":false,\"message\":\"Failed to save credentials\"}");
+        }
     });
 
     // === STREAM ENDPOINT ===

@@ -1,11 +1,5 @@
 #include "camera_control.h"
-#include <WiFi.h>
 #include "esp_camera.h"
-
-// ========== User Config ==========
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-// =================================
 
 bool camera_init() {
   camera_config_t config;
@@ -41,19 +35,3 @@ bool camera_init() {
   return true;
 }
 
-bool wifi_connect() {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.print("[INFO] Connecting to WiFi");
-  for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
-    delay(250);
-    Serial.print(".");
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[INFO] WiFi connected: " + WiFi.localIP().toString());
-    return true;
-  } else {
-    Serial.println("\n[ERROR] WiFi connect failed.");
-    return false;
-  }
-}
