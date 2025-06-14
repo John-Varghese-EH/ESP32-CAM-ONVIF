@@ -65,7 +65,7 @@ A professional firmware implementation for ESP32-CAM that provides ONVIF compati
 
 ## Usage
 
-### Setting Up PlatformIO
+### Setting Up Platform.IO
 
 1. Install Visual Studio Code from [code.visualstudio.com](https://code.visualstudio.com/)
 2. Install the PlatformIO extension:
