@@ -8,7 +8,7 @@
 
 > [!NOTE]
 > **🚧 Work in Progress:**  
-> Gnome-Undercover is still evolving! Help make it better and faster—contributions, feedback, and ideas are warmly welcome.  
+> The project is still evolving! Help make it better and faster—contributions, feedback, and ideas are warmly welcome.  
 > *Star the repo and join the project!*
 
 ---
