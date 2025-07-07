@@ -4,6 +4,15 @@
 [![Platform](https://img.shields.io/badge/platform-ESP32-blue.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+---
+
+> [!NOTE]
+> **🚧 Work in Progress:**  
+> Gnome-Undercover is still evolving! Help make it better and faster—contributions, feedback, and ideas are warmly welcome.  
+> *Star the repo and join the project!*
+
+---
+
 ## Overview
 
 **ESP32-CAM ONVIF RTSP Camera** is an open-source firmware project that transforms your affordable ESP32-CAM module into a network camera compatible with professional NVR/DVR systems, including Hikvision, Dahua, and other ONVIF-compliant solutions.
