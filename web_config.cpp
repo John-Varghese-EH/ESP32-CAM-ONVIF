@@ -31,16 +31,6 @@ void web_config_start() {
     }
 
     // All route definitions go here, inside this function!
-    webConfigServer.on("/", []() {
-        File file = SPIFFS.open("/index.html", "r");
-        if (!file) {
-            webConfigServer.send(404, "text/plain", "File not found");
-            return;
-        }
-        webConfigServer.streamFile(file, "text/html");
-        file.close();
-    });
-
     webConfigServer.on("/", HTTP_GET, []() {
         if (!webConfigServer.authenticate(WEB_USER, WEB_PASS)) {
             return webConfigServer.requestAuthentication();

@@ -1,7 +1,6 @@
 #include "rtsp_server.h"
 
 WiFiServer rtspServer(554);
-OV2640 cam;
 MyStreamer *streamer = nullptr;
 
 String getRTSPUrl() {
@@ -9,34 +8,9 @@ String getRTSPUrl() {
 }
 
 void rtsp_server_start() {
-  // Fill in your ESP32-CAM pin assignments
-  camera_config_t config;
-  config.pin_pwdn = -1;
-  config.pin_reset = -1;
-  config.pin_xclk = 4;
-  config.pin_sscb_sda = 18;
-  config.pin_sscb_scl = 23;
-  config.pin_d7 = 36;
-  config.pin_d6 = 37;
-  config.pin_d5 = 38;
-  config.pin_d4 = 39;
-  config.pin_d3 = 35;
-  config.pin_d2 = 14;
-  config.pin_d1 = 13;
-  config.pin_d0 = 34;
-  config.pin_vsync = 5;
-  config.pin_href = 27;
-  config.pin_pclk = 25;
-  config.xclk_freq_hz = 20000000;
-  config.ledc_timer = LEDC_TIMER_0;
-  config.ledc_channel = LEDC_CHANNEL_0;
-  config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size = FRAMESIZE_VGA;
-  config.jpeg_quality = 12;
-  config.fb_count = 1;
-
-  cam.init(config);
-  streamer = new MyStreamer(cam);
+  // The camera is already initialized in setup() via camera_init().
+  // We just need to create the streamer.
+  streamer = new MyStreamer();
   rtspServer.begin();
   Serial.println("[INFO] RTSP server started at " + getRTSPUrl());
 }
