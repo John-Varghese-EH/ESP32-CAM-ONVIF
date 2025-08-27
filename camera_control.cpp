@@ -1,7 +1,7 @@
 
 #include <Arduino.h>
 #include "camera_control.h"
-#define CAM_TASK_STACK_SIZE 8192
+#define CAM_TASK_STACK_SIZE 16384
 #include "esp_camera.h"
 
 bool camera_init() {
@@ -26,9 +26,9 @@ bool camera_init() {
   config.pin_reset = -1;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size = FRAMESIZE_VGA;
+  config.frame_size = FRAMESIZE_QVGA; // Reduce frame size to save memory
   config.jpeg_quality = 12;
-  config.fb_count = 2;
+  config.fb_count = 1; // Use only one frame buffer
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("[ERROR] Camera init failed: 0x%x\n", err);
