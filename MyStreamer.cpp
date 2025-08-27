@@ -7,7 +7,7 @@ extern "C" {
     #include "ll_cam.h"
 }
 
-MyStreamer::MyStreamer() : CStreamer(resolution[esp_camera_sensor_get()->status.framesize].width, resolution[esp_camera_sensor_get()->status.framesize].height) {
+MyStreamer::MyStreamer() : CStreamer(NULL, resolution[esp_camera_sensor_get()->status.framesize].width, resolution[esp_camera_sensor_get()->status.framesize].height) {
     // The CStreamer base class constructor needs the image width and height.
     // We get it from the currently configured camera sensor.
 }

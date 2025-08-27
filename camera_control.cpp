@@ -1,4 +1,7 @@
+
+#include <Arduino.h>
 #include "camera_control.h"
+#define CAM_TASK_STACK_SIZE 8192
 #include "esp_camera.h"
 
 bool camera_init() {

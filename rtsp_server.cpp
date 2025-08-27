@@ -1,4 +1,4 @@
-#include "/mnt/CODE/CODE/GitHub/ESP32-CAM-ONVIF/rtsp_server.h"
+#include "rtsp_server.h"
 
 WiFiServer rtspServer(554);
 MyStreamer *streamer = nullptr;
@@ -34,7 +34,7 @@ void rtsp_server_loop() {
       Serial.println("[INFO] RTSP client connected.");
       // Create a new session for the client.
       // The streamer is created once in rtsp_server_start().
-      session = new CRtspSession(client, streamer);
+      session = new CRtspSession(&client, streamer);
     }
   }
 }
