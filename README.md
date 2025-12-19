@@ -173,6 +173,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
+- WiFi scanning functionality added by BitVentures USA
 - Micro-RTSP for RTSP streaming on ESP32
 - ONVIF community for protocol documentation and inspiration
 - Thanks to all contributors and the open-source community!
