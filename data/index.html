@@ -30,6 +30,7 @@
   <nav class="tabs">
     <button class="tab-btn active" onclick="showPanel('live')">Live</button>
     <button class="tab-btn" onclick="showPanel('camera')">Camera</button>
+    <button class="tab-btn" onclick="showPanel('wifi')">WiFi</button>
     <button class="tab-btn" onclick="showPanel('sd')">SD Card</button>
     <button class="tab-btn" onclick="showPanel('system')">System</button>
   </nav>
@@ -117,6 +118,47 @@
       <tbody></tbody>
     </table>
   </section>
+  <section id="panel-wifi" class="panel" style="display:none">
+    <h2>WiFi Configuration</h2>
+    <div class="section-content">
+      <div class="current-wifi">
+        <h3>Current Connection</h3>
+        <div>Status: <span id="wifi-status">Unknown</span></div>
+        <div>SSID: <span id="wifi-ssid">-</span></div>
+        <div>IP: <span id="wifi-ip">-</span></div>
+      </div>
+      
+      <div class="wifi-actions">
+        <button class="btn" onclick="scanWiFi()">Scan Networks</button>
+        <div id="scan-status"></div>
+      </div>
+      
+      <div id="networks-list" style="display:none">
+        <h3>Available Networks</h3>
+        <table id="wifi-table">
+          <thead>
+            <tr>
+              <th>SSID</th>
+              <th>Signal</th>
+              <th>Security</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      
+      <div id="connect-form" style="display:none">
+        <h3>Connect to Network</h3>
+        <form id="wifi-form" onsubmit="return connectWiFi(event)">
+          <input type="text" id="wifi-connect-ssid" readonly>
+          <input type="password" id="wifi-connect-password" placeholder="Password" required>
+          <button type="submit" class="btn">Connect</button>
+        </form>
+      </div>
+    </div>
+  </section>
+  
   <section id="panel-system" class="panel" style="display:none">
     <h2>Network & System</h2>
     <div>RTSP URL: <span id="rtspUrl"></span></div>

@@ -1,18 +1,18 @@
 #include "web_config.h"
 #include <WebServer.h>
 #include <WiFi.h>
-#include "rtsp_server.h"       // For getRTSPUrl()
-#include "onvif_server.h"      // For ONVIF URL if needed
-#include "motion_detection.h"  // For motion_detected()
+#include "rtsp_server.h"
+#include "onvif_server.h"
+#include "motion_detection.h"
 #include <FS.h>
 #include <SPIFFS.h>
 #include <SD_MMC.h>
 #include <ArduinoJson.h>
 #include "esp_camera.h"
+#include "wifi_manager.h"
 
 WebServer webConfigServer(80);
 
-// --- Helper: HTTP Basic Auth ---
 const char* WEB_USER = "admin";
 const char* WEB_PASS = "esp123";
 
@@ -25,15 +25,26 @@ bool isAuthenticated(WebServer &server) {
 }
 
 void web_config_start() {
-    // Mount SPIFFS for static files
     if (!SPIFFS.begin(true)) {
-        Serial.println("SPIFFS/LittleFS Mount Failed");
+        Serial.println("[ERROR] SPIFFS/LittleFS Mount Failed");
         return;
     }
-    // Protect static files with authentication
-    webConfigServer.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html").setAuthentication(WEB_USER, WEB_PASS);
 
-    // === API ENDPOINTS ===
+    // All route definitions go here, inside this function!
+    webConfigServer.on("/", HTTP_GET, []() {
+        if (!webConfigServer.authenticate(WEB_USER, WEB_PASS)) {
+            return webConfigServer.requestAuthentication();
+        }
+        File file = SPIFFS.open("/index.html", "r");
+        if (!file) {
+            webConfigServer.send(404, "text/plain", "File not found");
+            return;
+        }
+        webConfigServer.streamFile(file, "text/html");
+        file.close();
+    });
+
+    // --- API ENDPOINTS ---
     webConfigServer.on("/api/status", HTTP_GET, []() {
         if (!isAuthenticated(webConfigServer)) return;
         String json = "{";
@@ -77,10 +88,10 @@ void web_config_start() {
         if (doc.containsKey("awb"))         s->set_whitebal(s, doc["awb"]);
         if (doc.containsKey("awb_gain"))    s->set_awb_gain(s, doc["awb_gain"]);
         if (doc.containsKey("wb_mode"))     s->set_wb_mode(s, doc["wb_mode"]);
-        if (doc.containsKey("aec"))         s->set_aec(s, doc["aec"]);
+        if (doc.containsKey("aec"))         s->set_aec2(s, doc["aec"]);
         if (doc.containsKey("aec2"))        s->set_aec2(s, doc["aec2"]);
         if (doc.containsKey("ae_level"))    s->set_ae_level(s, doc["ae_level"]);
-        if (doc.containsKey("agc"))         s->set_agc(s, doc["agc"]);
+        if (doc.containsKey("agc"))         s->set_gain_ctrl(s, doc["agc"]);
         if (doc.containsKey("gainceiling")) s->set_gainceiling(s, doc["gainceiling"]);
         if (doc.containsKey("bpc"))         s->set_bpc(s, doc["bpc"]);
         if (doc.containsKey("wpc"))         s->set_wpc(s, doc["wpc"]);
@@ -164,6 +175,73 @@ void web_config_start() {
         webConfigServer.send(200, "application/json", "{\"ok\":1}");
         ESP.restart();
     });
+    
+    // --- WiFi API Endpoints ---
+    webConfigServer.on("/api/wifi/status", HTTP_GET, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        
+        String json = "{";
+        json += "\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
+        json += "\"ssid\":\"" + wifiManager.getSSID() + "\",";
+        json += "\"ip\":\"" + wifiManager.getLocalIP().toString() + "\",";
+        json += "\"mode\":\"" + String(wifiManager.isInAPMode() ? "AP" : "STA") + "\"";
+        json += "}";
+        
+        webConfigServer.send(200, "application/json", json);
+    });
+    
+    webConfigServer.on("/api/wifi/scan", HTTP_GET, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        
+        int networksFound = wifiManager.scanNetworks();
+        WiFiNetwork* networks = wifiManager.getScannedNetworks();
+        
+        String json = "{\"networks\":[";
+        for (int i = 0; i < networksFound; i++) {
+            if (i > 0) json += ",";
+            json += "{";
+            json += "\"ssid\":\"" + networks[i].ssid + "\",";
+            json += "\"rssi\":" + String(networks[i].rssi) + ",";
+            json += "\"encType\":" + String(networks[i].encType);
+            json += "}";
+        }
+        json += "]}";
+        
+        webConfigServer.send(200, "application/json", json);
+    });
+    
+    webConfigServer.on("/api/wifi/connect", HTTP_POST, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        
+        StaticJsonDocument<256> doc;
+        DeserializationError err = deserializeJson(doc, webConfigServer.arg("plain"));
+        
+        if (err || !doc.containsKey("ssid") || !doc.containsKey("password")) {
+            webConfigServer.send(400, "application/json", "{\"success\":false,\"message\":\"Invalid request\"}");
+            return;
+        }
+        
+        String ssid = doc["ssid"].as<String>();
+        String password = doc["password"].as<String>();
+        
+        // Save credentials
+        if (wifiManager.saveCredentials(ssid, password)) {
+            // Try to connect
+            bool connected = wifiManager.connectToNetwork(ssid, password);
+            
+            if (connected) {
+                webConfigServer.send(200, "application/json", "{\"success\":true,\"message\":\"Connected\"}");
+                
+                // Optional: schedule a restart after a short delay to ensure response is sent
+                delay(1000);
+                ESP.restart();
+            } else {
+                webConfigServer.send(200, "application/json", "{\"success\":false,\"message\":\"Failed to connect\"}");
+            }
+        } else {
+            webConfigServer.send(500, "application/json", "{\"success\":false,\"message\":\"Failed to save credentials\"}");
+        }
+    });
 
     // === STREAM ENDPOINT ===
     webConfigServer.on("/stream", HTTP_GET, []() {
@@ -198,9 +276,9 @@ void web_config_start() {
     });
 
     webConfigServer.begin();
-    Serial.println("[INFO] Web config server started.");
-}
+        Serial.println("[INFO] Web config server started.");
+    }
 
-void web_config_loop() {
-    webConfigServer.handleClient();
-}
+    void web_config_loop() {
+        webConfigServer.handleClient();
+    }

@@ -1,0 +1,60 @@
+#pragma once
+#include <Arduino.h>
+#include <WiFi.h>
+#include <FS.h>
+
+// WiFi credentials structure
+struct WiFiCredentials {
+  String ssid;
+  String password;
+};
+
+// WiFi network info structure for scanning
+struct WiFiNetwork {
+  String ssid;
+  int32_t rssi;
+  uint8_t encType;
+};
+
+// WiFi manager class
+class WiFiManager {
+public:
+  WiFiManager();
+  
+  // Connect using stored credentials or fall back to AP mode
+  bool begin();
+  
+  // Direct connection methods
+  bool connectToStoredNetwork();
+  bool connectToNetwork(const String& ssid, const String& password);
+  
+  // AP mode functions
+  void startAPMode();
+  bool isInAPMode();
+  
+  // Scanning functions
+  int scanNetworks();
+  WiFiNetwork* getScannedNetworks();
+  int getScannedNetworksCount();
+  
+  // Credential management
+  bool saveCredentials(const String& ssid, const String& password);
+  WiFiCredentials loadCredentials();
+  
+  // Utility
+  IPAddress getLocalIP();
+  String getSSID();
+  
+private:
+  bool _apMode;
+  int _scannedNetworksCount;
+  WiFiNetwork* _scannedNetworks;
+  
+  // Constants
+  const char* _credentialsFile = "/wifi_creds.json";
+  const char* _apSSID = "ESP32CAM-ONVIF";
+  const char* _apPassword = "esp32cam";
+};
+
+// Global instance
+extern WiFiManager wifiManager;

@@ -1,11 +1,8 @@
-#include "camera_control.h"
-#include <WiFi.h>
-#include "esp_camera.h"
 
-// ========== User Config ==========
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-// =================================
+#include <Arduino.h>
+#include "camera_control.h"
+#define CAM_TASK_STACK_SIZE 16384
+#include "esp_camera.h"
 
 bool camera_init() {
   camera_config_t config;
@@ -29,9 +26,9 @@ bool camera_init() {
   config.pin_reset = -1;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size = FRAMESIZE_VGA;
+  config.frame_size = FRAMESIZE_QVGA; // Reduce frame size to save memory
   config.jpeg_quality = 12;
-  config.fb_count = 2;
+  config.fb_count = 1; // Use only one frame buffer
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("[ERROR] Camera init failed: 0x%x\n", err);
@@ -41,19 +38,3 @@ bool camera_init() {
   return true;
 }
 
-bool wifi_connect() {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.print("[INFO] Connecting to WiFi");
-  for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
-    delay(250);
-    Serial.print(".");
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[INFO] WiFi connected: " + WiFi.localIP().toString());
-    return true;
-  } else {
-    Serial.println("\n[ERROR] WiFi connect failed.");
-    return false;
-  }
-}

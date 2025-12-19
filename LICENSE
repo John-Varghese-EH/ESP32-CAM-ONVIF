@@ -1,0 +1,57 @@
+MIT License
+
+Copyright (c) 2025 J0X
+Copyright (c) 2025 ₿itVentures USA
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------
+
+PROJECT MODIFICATIONS
+--------------------
+
+This project has been modified from its original version to include WiFi scanning functionality, replacing the previous approach that used hardcoded WiFi credentials.
+
+Key changes include:
+
+1. Addition of a WiFi manager module (wifi_manager.h and wifi_manager.cpp) that provides:
+   - WiFi network scanning
+   - Credential storage using JSON in SPIFFS
+   - Automatic connection using stored credentials
+   - Fallback to Access Point mode when needed
+
+2. Enhanced web interface with a dedicated WiFi configuration tab that allows:
+   - Viewing current connection status
+   - Scanning for available networks
+   - Selecting a network and entering credentials
+   - Connecting to the selected network
+
+3. Updated startup flow to:
+   - Try connecting using stored credentials first
+   - Fall back to AP mode if connection fails
+   - Allow easy network selection through the web interface
+
+These changes provide a more user-friendly way to configure the WiFi connection
+compared to hardcoding credentials in the source code.
+
+[Fork Information]
+This is a fork of the ESP32CAM-ONVIF-DVR-NVR-Recording project. 
+This modified version includes WiFi scanning capabilities that allow users to select from available networks and enter credentials through a web interface, instead of requiring hardcoded credentials in the source code. The implementation maintains all the original functionality while adding a more user-friendly configuration experience.
+
+Modified: June 2025

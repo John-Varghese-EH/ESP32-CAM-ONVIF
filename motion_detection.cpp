@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "motion_detection.h"
 #include "esp_camera.h"
 
