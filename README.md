@@ -63,48 +63,27 @@ Transform your affordable ESP32-CAM module into a powerful ONVIF-compatible netw
 
 ## Installation
 
+### PlatformIO (VS Code) - Recommended
+
+1. **Install Visual Studio Code** and the **PlatformIO** extension.
+2. **Clone this repository** or download the zip.
+3. **Open the folder** in VS Code. PlatformIO should automatically detect the project.
+4. **Build and Upload**:
+   - The included `platformio.ini` is already configured with the correct dependencies and board settings.
+   - Click the PlatformIO icon > Project Tasks > esp32cam > Upload.
+
 ### Arduino IDE
 
 1. **Install Arduino IDE** from [arduino.cc](https://www.arduino.cc/)
 2. **Add ESP32 board support:**
-   - File > Preferences > Add  
-     `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`  
-     to "Additional Board Manager URLs"
-   - Tools > Board > Boards Manager > Search "ESP32" > Install latest version
+   - File > Preferences > Add `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json` to "Additional Board Manager URLs"
+   - Tools > Board > Boards Manager > Search "ESP32" > Install.
 3. **Install required libraries:**
-   - Tools > Manage Libraries > Search and install "ArduinoJson"
-4. **Connect ESP32-CAM** via FTDI adapter:
-   - GND → GND
-   - 5V → 5V
-   - TX → RX
-   - RX → TX
-   - GPIO0 → GND (for flashing mode)
-5. **Select Board/Port:**  
-   Tools > Board > ESP32 Arduino > AI-Thinker ESP32-CAM  
-   Tools > Port > [Your FTDI port]
-6. **Upload Firmware:**  
-   Click Upload. After upload, disconnect GPIO0 from GND and reset ESP32-CAM.
-
-### PlatformIO (VS Code)
-
-1. **Install Visual Studio Code**
-2. **Install PlatformIO extension**
-3. **Create a new project:**
+   - **Micro-RTSP**: Do NOT install the default library from the manager. instead, download [this fork](https://github.com/geeksville/Micro-RTSP) as a ZIP and add it via Sketch > Include Library > Add .ZIP Library.
+   - **ArduinoJson**: Tools > Manage Libraries > Search and install "ArduinoJson".
+4. **Select Board/Port:**
    - Board: AI Thinker ESP32-CAM
-   - Framework: Arduino
-4. **Configure `platformio.ini`:**
-   ```
-   [env:esp32cam]
-   platform = espressif32
-   board = esp32cam
-   framework = arduino
-   monitor_speed = 115200
-   lib_deps = bblanchon/ArduinoJson @ ^6.21.3
-   upload_speed = 921600
-   build_flags = -DCORE_DEBUG_LEVEL=5
-   ```
-5. **Import source files** into `src/` directory.
-6. **Flash firmware** as above.
+5. **Upload Firmware** using an FTDI adapter (GPIO0 to GND).
 
 ---
 
