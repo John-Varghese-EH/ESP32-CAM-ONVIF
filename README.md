@@ -28,6 +28,11 @@ Transform your affordable ESP32-CAM module into a powerful ONVIF-compatible netw
   Simple Wi-Fi configuration (web-based setup coming soon).
 - 🌐 **Web Configuration Interface:**  
   *(Planned)* Configure camera, Wi-Fi, and storage via browser.
+- **PTZ Control**: Support for Pan/Tilt servos via ONVIF.
+- **Flash Control**: Toggle Flash LED via ONVIF "Day/Night" mode.
+- **Robust Recording**: Loop recording to SD card even without WiFi.
+- **Static IP**: Configurable static IP for stable DVR connections.
+- **Web Config**: Manage settings via browser.
 - 🗂️ **SD Card Recording:**  
   *(Planned)* Record video directly to microSD card.
 - ↔️ **Motion Detection:**  

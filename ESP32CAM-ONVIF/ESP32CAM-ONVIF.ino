@@ -19,6 +19,7 @@
 #include "motion_detection.h"
 #include "config.h"
 #include "wifi_manager.h"
+#include "serial_console.h"
 
 void setup() {
   Serial.begin(115200);
@@ -56,5 +57,6 @@ void loop() {
   onvif_server_loop();
   motion_detection_loop();
   sd_recorder_loop();
+  serial_console_loop();
   // power management, stats, etc.
 }

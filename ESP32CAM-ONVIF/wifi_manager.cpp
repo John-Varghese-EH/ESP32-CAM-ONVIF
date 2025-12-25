@@ -43,6 +43,20 @@ bool WiFiManager::connectToStoredNetwork() {
 bool WiFiManager::connectToNetwork(const String& ssid, const String& password) {
   _apMode = false;
   WiFi.mode(WIFI_STA);
+  
+  if (STATIC_IP_ENABLED) {
+    IPAddress ip(STATIC_IP_ADDR);
+    IPAddress gateway(STATIC_GATEWAY);
+    IPAddress subnet(STATIC_SUBNET);
+    IPAddress dns(STATIC_DNS);
+    
+    if (WiFi.config(ip, gateway, subnet, dns)) {
+      Serial.println("[INFO] Static IP Configured: " + ip.toString());
+    } else {
+      Serial.println("[WARN] Static IP Configuration Failed. Falling back to DHCP.");
+    }
+  }
+  
   WiFi.begin(ssid.c_str(), password.c_str());
   
   Serial.print("[INFO] Connecting to WiFi: ");

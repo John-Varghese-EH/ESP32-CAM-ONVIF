@@ -9,6 +9,13 @@
 #define WIFI_SSID       "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD   "YOUR_WIFI_PASSWORD"
 
+// --- Static IP Settings (Optional) ---
+#define STATIC_IP_ENABLED   false       // Set to true to use Static IP
+#define STATIC_IP_ADDR      192,168,1,200
+#define STATIC_GATEWAY      192,168,1,1
+#define STATIC_SUBNET       255,255,255,0
+#define STATIC_DNS          8,8,8,8
+
 // --- AP Mode Settings ---
 // Fallback access point if WiFi connection fails
 #define AP_SSID         "ESP32CAM-ONVIF"

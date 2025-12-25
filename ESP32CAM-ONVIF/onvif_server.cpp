@@ -85,8 +85,7 @@ void handle_set_imaging_settings(String &req) {
     }
 }
 
-    }
-}
+
 
 void handle_ptz(String &req) {
    #if PTZ_ENABLED

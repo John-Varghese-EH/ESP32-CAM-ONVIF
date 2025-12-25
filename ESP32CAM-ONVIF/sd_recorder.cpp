@@ -4,6 +4,7 @@
 #include "esp_camera.h" // Added for camera functions
 
 #include "config.h"
+#include "wifi_manager.h"
 
 void sd_recorder_init() {
   bool mountSuccess = false;
