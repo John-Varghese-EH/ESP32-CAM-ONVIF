@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "onvif_server.h"
 #include "rtsp_server.h"
+#include "camera_control.h"
 #include <WiFiUdp.h>
 #include <WebServer.h>
 #include "config.h"
@@ -60,6 +61,75 @@ String getStreamUriResponse() {
     "</trt:GetStreamUriResponse>"
     "</SOAP-ENV:Body>"
     "</SOAP-ENV:Envelope>";
+    "</SOAP-ENV:Body>"
+    "</SOAP-ENV:Envelope>";
+}
+
+// Simple parser for SetImagingSettings
+// We look for <tt:IrCutFilterMode>OFF</tt:IrCutFilterMode> to turn on 'Night Mode' (Flash ON)
+// and ON or AUTO for 'Day Mode' (Flash OFF)
+void handle_set_imaging_settings(String &req) {
+    if (!FLASH_LED_ENABLED) return;
+    
+    // Very basic string parsing as XML parsing is heavy
+    if (req.indexOf("IrCutFilterMode") > 0) {
+        if (req.indexOf(">OFF<") > 0) {
+            // Night mode -> Flash ON
+            set_flash_led(true);
+            Serial.println("[INFO] ONVIF: Night Mode (Flash ON)");
+        } else {
+            // Day mode (ON or AUTO) -> Flash OFF
+            set_flash_led(false);
+            Serial.println("[INFO] ONVIF: Day Mode (Flash OFF)");
+        }
+    }
+}
+
+    }
+}
+
+void handle_ptz(String &req) {
+   #if PTZ_ENABLED
+   // AbsoluteMove
+   // <tptz:Vector PanTilt="x" y="0.5"/>
+   // Simplified parsing: find PanTilt space x=" and y="
+   // This is fragile but suffices for minimal SOAP
+   
+   if (req.indexOf("AbsoluteMove") > 0) {
+       // Look for x="0.5" y="0.5" or similar
+       // Or PanTilt x="0.5" y="0.5"
+       // Actually ONVIF usually sends: <tt:PanTilt x="0.5" y="0.5" ... />
+       
+       float x = 0.5f; 
+       float y = 0.5f;
+       
+       int xIdx = req.indexOf("x=\"");
+       if (xIdx > 0) {
+           int endQ = req.indexOf("\"", xIdx + 3);
+           String val = req.substring(xIdx + 3, endQ);
+           x = val.toFloat();
+       }
+       
+       int yIdx = req.indexOf("y=\"");
+       if (yIdx > 0) {
+           int endQ = req.indexOf("\"", yIdx + 3);
+           String val = req.substring(yIdx + 3, endQ);
+           y = val.toFloat();
+       }
+       
+       // ONVIF uses -1 to 1. Map to 0 to 1.
+       // x = (x + 1.0) / 2.0;
+       // y = (y + 1.0) / 2.0; 
+       // NOTE: Some NVRs assume 0..1, others -1..1. 
+       // Let's assume -1..1 for standard ONVIF PTZ vectors.
+       
+       float finalX = (x + 1.0f) / 2.0f;
+       float finalY = (y + 1.0f) / 2.0f;
+       
+       ptz_set_absolute(finalX, finalY);
+       Serial.printf("[INFO] PTZ Move: x=%.2f y=%.2f -> servo=%.2f, %.2f\n", x, y, finalX, finalY);
+   }
+   #endif
 }
 
 void handle_onvif_soap() {
@@ -70,6 +140,12 @@ void handle_onvif_soap() {
     onvifServer.send(200, "application/soap+xml", getStreamUriResponse());
   } else if (req.indexOf("GetDeviceInformation") > 0) {
     onvifServer.send(200, "application/soap+xml", getDeviceInfoResponse());
+    } else if (req.indexOf("SetImagingSettings") > 0) {
+    handle_set_imaging_settings(req);
+    onvifServer.send(200, "application/soap+xml", "<ok/>"); // Dummy response
+  } else if (req.indexOf("AbsoluteMove") > 0 || req.indexOf("ContinuousMove") > 0 || req.indexOf("Stop") > 0) {
+    handle_ptz(req);
+    onvifServer.send(200, "application/soap+xml", "<ok/>");
   } else {
     onvifServer.send(200, "application/soap+xml", "<ok/>");
   }
@@ -111,6 +187,7 @@ void handle_onvif_discovery() {
 
 void onvif_server_start() {
   onvifServer.on("/onvif/device_service", HTTP_POST, handle_onvif_soap);
+  onvifServer.on("/onvif/ptz_service", HTTP_POST, handle_onvif_soap); // Route PTZ to same handler for now
   onvifServer.begin();
   onvifUDP.beginMulticast(IPAddress(239,255,255,250), 3702); // Fixed: use only 2 args
   Serial.println("[INFO] ONVIF server started.");

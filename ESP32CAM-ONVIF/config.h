@@ -19,6 +19,25 @@
 #define RTSP_PORT       554             // RTSP Streaming port (standard: 554)
 #define ONVIF_PORT      8000            // ONVIF Service port (standard: 80, 8000, or 8080)
 
+// --- Flash LED Settings ---
+// GPIO 4 is standard for ESP32-CAM Flash.
+// WARNING: GPIO 4 is also SD Card Data 1. If FLASH_LED_ENABLED is true, SD card MUST use 1-bit mode.
+// If you disable Flash, SD card can use 4-bit mode (faster).
+#define FLASH_LED_ENABLED true          // Set to false to enable 4-bit SD mode
+#define FLASH_LED_PIN     4
+#define FLASH_LED_INVERT false          // false = High is ON
+
+// --- PTZ (Servo) Settings ---
+// Optional: Connect servos for Pan/Tilt control
+#define PTZ_ENABLED       false         // Set to true to enable servo control
+#define SERVO_PAN_PIN     12            // GPIO for Pan Servo
+#define SERVO_TILT_PIN    13            // GPIO for Tilt Servo
+
+// --- Recording Settings ---
+#define ENABLE_DAILY_RECORDING  false   // If true, records continuously (loop overwrite)
+#define RECORD_SEGMENT_SEC      300     // 5 minutes per file
+#define MAX_DISK_USAGE_PCT      90      // Auto-delete oldest files if disk usage > 90%
+
 // --- Security ---
 // Credentials for the Web Configuration Interface
 #define WEB_USER        "admin"
