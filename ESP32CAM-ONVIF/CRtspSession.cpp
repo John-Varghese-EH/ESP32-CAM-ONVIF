@@ -309,7 +309,12 @@ void CRtspSession::Handle_RtspSETUP()
     static char Transport[255];
 
     // init RTP streamer transport type (UDP or TCP) and ports for UDP transport
-    m_Streamer->InitTransport(m_ClientRTPPort,m_ClientRTCPPort,m_TcpTransport);
+    if (m_Streamer) {
+        m_Streamer->InitTransport(m_ClientRTPPort,m_ClientRTCPPort,m_TcpTransport);
+    } else {
+        printf("Error: m_Streamer is null in SETUP\n");
+        return;
+    }
 
     // simulate SETUP server response
     if (m_TcpTransport)
@@ -319,8 +324,8 @@ void CRtspSession::Handle_RtspSETUP()
                  "RTP/AVP;unicast;destination=127.0.0.1;source=127.0.0.1;client_port=%i-%i;server_port=%i-%i",
                  m_ClientRTPPort,
                  m_ClientRTCPPort,
-                 m_Streamer->GetRtpServerPort(),
-                 m_Streamer->GetRtcpServerPort());
+                 m_Streamer ? m_Streamer->GetRtpServerPort() : 0,
+                 m_Streamer ? m_Streamer->GetRtcpServerPort() : 0);
     snprintf(Response,sizeof(Response),
              "RTSP/1.0 200 OK\r\nCSeq: %s\r\n"
              "%s\r\n"
@@ -404,9 +409,12 @@ bool CRtspSession::handleRequests(uint32_t readTimeoutMs)
 }
 
 void CRtspSession::broadcastCurrentFrame(uint32_t curMsec) {
-    // Send a frame
+    // Send a frame - CRASH PROOFING
     if (m_streaming && !m_stopped) {
-        // printf("serving a frame\n");
-        m_Streamer->streamImage(curMsec);
+        if(m_Streamer) {
+             m_Streamer->streamImage(curMsec);
+        } else {
+             printf("Error: m_Streamer is null\n");
+        }
     }
 }

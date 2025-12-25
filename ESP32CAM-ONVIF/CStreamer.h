@@ -13,6 +13,9 @@ public:
     void    InitTransport(u_short aRtpPort, u_short aRtcpPort, bool TCP);
     u_short GetRtpServerPort();
     u_short GetRtcpServerPort();
+    
+    // Updates the TCP client socket for RTP-over-RTSP
+    void setClientSocket(SOCKET client) { m_Client = client; }
 
     virtual void    streamImage(uint32_t curMsec) = 0; // send a new image to the client
 protected:

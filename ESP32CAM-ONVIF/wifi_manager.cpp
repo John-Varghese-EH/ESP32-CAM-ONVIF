@@ -2,11 +2,30 @@
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 #include "config.h"
+#include "status_led.h"
 
 // Global instance
 WiFiManager wifiManager;
 
-WiFiManager::WiFiManager() : _apMode(false), _scannedNetworksCount(0), _scannedNetworks(nullptr) {
+WiFiManager::WiFiManager() : _apMode(false), _scannedNetworksCount(0), _scannedNetworks(nullptr), _lastConnectAttempt(0) {
+}
+
+void WiFiManager::loop() {
+    if (_apMode) return;
+    
+    // Simple non-blocking reconnection
+    if (WiFi.status() != WL_CONNECTED) {
+        status_led_error(); // Indicate lost connection
+        if (millis() - _lastConnectAttempt > 10000) {
+            _lastConnectAttempt = millis();
+            Serial.println("[INFO] WiFi Lost. Reconnecting...");
+            status_led_wifi_connecting();
+            WiFi.reconnect();
+        }
+    } else {
+        // If back online, ensure LED is solid
+        status_led_connected();
+    }
 }
 
 bool WiFiManager::begin() {
@@ -16,6 +35,7 @@ bool WiFiManager::begin() {
   }
 
   // If stored credentials failed or missing, try hardcoded config.h credentials
+  status_led_wifi_connecting();
   String configSSID = WIFI_SSID;
   if(configSSID != "YOUR_WIFI_SSID" && configSSID.length() > 0) {
       Serial.println("[INFO] Trying config.h credentials...");
@@ -43,6 +63,8 @@ bool WiFiManager::connectToStoredNetwork() {
 bool WiFiManager::connectToNetwork(const String& ssid, const String& password) {
   _apMode = false;
   WiFi.mode(WIFI_STA);
+  // Important for stable streaming: Disable WiFi Power Save
+  WiFi.setSleep(false);
   
   if (STATIC_IP_ENABLED) {
     IPAddress ip(STATIC_IP_ADDR);
@@ -58,6 +80,7 @@ bool WiFiManager::connectToNetwork(const String& ssid, const String& password) {
   }
   
   WiFi.begin(ssid.c_str(), password.c_str());
+  status_led_wifi_connecting();
   
   Serial.print("[INFO] Connecting to WiFi: ");
   Serial.println(ssid);
@@ -72,15 +95,18 @@ bool WiFiManager::connectToNetwork(const String& ssid, const String& password) {
   
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\n[INFO] WiFi connected: " + WiFi.localIP().toString());
+    status_led_connected();
     return true;
   } else {
     Serial.println("\n[ERROR] WiFi connect failed.");
+    status_led_error();
     return false;
   }
 }
 
 void WiFiManager::startAPMode() {
   Serial.println("[INFO] Starting AP mode");
+  status_led_wifi_connecting(); 
   _apMode = true;
   WiFi.mode(WIFI_AP);
   WiFi.softAP(AP_SSID, AP_PASSWORD);

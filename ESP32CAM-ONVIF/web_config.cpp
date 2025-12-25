@@ -1,9 +1,12 @@
 #include "web_config.h"
 #include <WebServer.h>
 #include <WiFi.h>
+#include "index_html.h" // Inline HTML
 #include "rtsp_server.h"
 #include "onvif_server.h"
 #include "motion_detection.h"
+#include "auto_flash.h"
+#include "camera_control.h"
 #include <FS.h>
 #include <SPIFFS.h>
 #include <SD_MMC.h>
@@ -26,23 +29,17 @@ bool isAuthenticated(WebServer &server) {
 }
 
 void web_config_start() {
+    // SPIFFS no longer required for index.html, but still needed for SD/Config persistence if used
     if (!SPIFFS.begin(true)) {
-        Serial.println("[ERROR] SPIFFS/LittleFS Mount Failed");
-        return;
+        Serial.println("[WARN] SPIFFS Mount Failed - Configs might not save");
     }
 
-    // All route definitions go here, inside this function!
+    // Serving Embedded HTML
     webConfigServer.on("/", HTTP_GET, []() {
         if (!webConfigServer.authenticate(WEB_USER, WEB_PASS)) {
-            return webConfigServer.requestAuthentication();
+           return webConfigServer.requestAuthentication();
         }
-        File file = SPIFFS.open("/index.html", "r");
-        if (!file) {
-            webConfigServer.send(404, "text/plain", "File not found");
-            return;
-        }
-        webConfigServer.streamFile(file, "text/html");
-        file.close();
+        webConfigServer.send_P(200, "text/html", index_html);
     });
 
     // --- API ENDPOINTS ---
@@ -51,8 +48,10 @@ void web_config_start() {
         String json = "{";
         json += "\"status\":\"Online\",";
         json += "\"rtsp\":\"" + getRTSPUrl() + "\",";
+        json += "\"rtsp\":\"" + getRTSPUrl() + "\",";
         json += "\"onvif\":\"http://" + WiFi.localIP().toString() + ":" + String(ONVIF_PORT) + "/onvif/device_service\",";
-        json += "\"motion\":" + String(motion_detected() ? "true" : "false");
+        json += "\"motion\":" + String(motion_detected() ? "true" : "false") + ",";
+        json += "\"autoflash\":" + String(auto_flash_is_enabled() ? "true" : "false");
         json += "}";
         webConfigServer.send(200, "application/json", json);
     });
@@ -122,6 +121,8 @@ void web_config_start() {
     });
 
     // --- SD Card Download ---
+    // CSS and JS are now inline in index.html, no need to serve files
+    // But keep stream logic etc.
     webConfigServer.on("/api/sd/download", HTTP_GET, []() {
         if (!isAuthenticated(webConfigServer)) return;
         if (!webConfigServer.hasArg("file")) {
@@ -160,6 +161,28 @@ void web_config_start() {
         if (!isAuthenticated(webConfigServer)) return;
         // Start/stop SD recording logic here
         webConfigServer.send(200, "application/json", "{\"ok\":1}");
+    });
+
+    // --- Flash Control ---
+    webConfigServer.on("/api/flash", HTTP_POST, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        StaticJsonDocument<64> doc;
+        deserializeJson(doc, webConfigServer.arg("plain"));
+        bool state = doc["state"];
+        
+        // If manual control is used, disable auto flash temporarily (or user should toggle it off first)
+        // But for simplicity, we just set the LED.
+        set_flash_led(state);
+        webConfigServer.send(200, "application/json", "{}");
+    });
+    
+    webConfigServer.on("/api/autoflash", HTTP_POST, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        StaticJsonDocument<64> doc;
+        deserializeJson(doc, webConfigServer.arg("plain"));
+        bool enabled = doc["enabled"];
+        auto_flash_set_enabled(enabled);
+        webConfigServer.send(200, "application/json", "{}");
     });
 
     // --- Reboot ---

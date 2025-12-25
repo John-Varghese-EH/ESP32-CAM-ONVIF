@@ -1,24 +1,21 @@
 #include <Arduino.h>
 #include "motion_detection.h"
-#include "esp_camera.h"
+#include "config.h"
 
+// Basic frame-difference motion detection stub
 static bool motion = false;
 
 void motion_detection_init() {
-  // Initialize motion detection buffers, etc.
+  if (!ENABLE_MOTION_DETECTION) return;
+  // Allocation would happen here
 }
 
 void motion_detection_loop() {
-  // Compare frames, set motion flag
-  // Very basic example (expand for real use)
-  static unsigned long lastToggle = 0;
-  if(millis() - lastToggle > 10000){
-    motion = !motion;
-    Serial.printf("[INFO] Motion detected: %s\n", motion ? "YES" : "NO");
-    lastToggle = millis();
-  }
+  if (!ENABLE_MOTION_DETECTION) return;
+  // logic to update 'motion' variable would go here
 }
 
 bool motion_detected() {
+  if (!ENABLE_MOTION_DETECTION) return false;
   return motion;
 }

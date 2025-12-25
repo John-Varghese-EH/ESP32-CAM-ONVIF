@@ -34,7 +34,7 @@ int CStreamer::SendRtpPacket(unsigned const char * jpeg, int jpegLen, int fragme
 #define KRtpHeaderSize 12           // size of the RTP header
 #define KJpegHeaderSize 8           // size of the special JPEG payload header
 
-#define MAX_FRAGMENT_SIZE 1100 // FIXME, pick more carefully
+#define MAX_FRAGMENT_SIZE 1280 // Safe MTU for WiFi (1500 - headers)
     int fragmentLen = MAX_FRAGMENT_SIZE;
     if(fragmentLen + fragmentOffset > jpegLen) // Shrink last fragment if needed
         fragmentLen = jpegLen - fragmentOffset;
@@ -163,6 +163,7 @@ u_short CStreamer::GetRtcpServerPort()
     return m_RtcpServerPort;
 };
 
+
 void CStreamer::streamFrame(unsigned const char *data, uint32_t dataLen, uint32_t curMsec)
 {
     if(m_prevMsec == 0) // first frame init our timestamp
@@ -183,6 +184,12 @@ void CStreamer::streamFrame(unsigned const char *data, uint32_t dataLen, uint32_
     int offset = 0;
     do {
         offset = SendRtpPacket(data, dataLen, offset, qtable0, qtable1);
+        // CRITICAL FOR SMOOTH STREAMING:
+        // Yield to allow WiFi stack to actually transmit the packet
+        // otherwise we fill the buffer and choke.
+        yield();
+        // Tiny pacing to prevent UDP burst loss on router side
+        delayMicroseconds(500); 
     } while(offset != 0);
 
     // Increment ONLY after a full frame

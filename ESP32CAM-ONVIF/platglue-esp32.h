@@ -26,7 +26,7 @@ inline void closesocket(SOCKET s) {
 
     if(s) {
         s->stop();
-        // delete s; TDP WiFiClients are never on the heap in arduino land?
+        delete s; // Memory leak fix: We allocated this on heap in rtsp_server.cpp
     }
 }
 
@@ -67,6 +67,7 @@ inline ssize_t socketsend(SOCKET sockfd, const void *buf, size_t len)
 inline ssize_t udpsocketsend(UDPSOCKET sockfd, const void *buf, size_t len,
                              IPADDRESS destaddr, IPPORT destport)
 {
+    if(!sockfd) return 0; // Safety check
     sockfd->beginPacket(destaddr, destport);
     sockfd->write((const uint8_t *)  buf, len);
     if(!sockfd->endPacket())

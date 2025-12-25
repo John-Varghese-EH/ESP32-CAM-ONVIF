@@ -41,14 +41,17 @@ public:
   bool saveCredentials(const String& ssid, const String& password);
   WiFiCredentials loadCredentials();
   
-  // Utility
   IPAddress getLocalIP();
   String getSSID();
+  // int getScannedNetworksCount(); // Removed duplicate
+  
+  void loop(); // Handle reconnection
   
 private:
   bool _apMode;
   int _scannedNetworksCount;
   WiFiNetwork* _scannedNetworks;
+  unsigned long _lastConnectAttempt;
   
   // Constants
   const char* _credentialsFile = "/wifi_creds.json";

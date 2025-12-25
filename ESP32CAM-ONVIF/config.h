@@ -1,7 +1,12 @@
 #pragma once
 
 // ==============================================================================
-//   ESP32-CAM ONVIF/RTSP/DVR Configuration
+//   ESP32-CAM ONVIF/RTSP/HVR Configuration
+// ==============================================================================
+//   --- Project Attribution ---
+//   GitHub: John-Varghese-EH
+//   Project: ESP32-CAM ONVIF/RTSP/HVR
+//   Version: 1.2
 // ==============================================================================
 
 // --- WiFi Settings ---
@@ -9,17 +14,22 @@
 #define WIFI_SSID       "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD   "YOUR_WIFI_PASSWORD"
 
-// --- Static IP Settings (Optional) ---
-#define STATIC_IP_ENABLED   false       // Set to true to use Static IP
-#define STATIC_IP_ADDR      192,168,1,200
-#define STATIC_GATEWAY      192,168,1,1
-#define STATIC_SUBNET       255,255,255,0
-#define STATIC_DNS          8,8,8,8
-
 // --- AP Mode Settings ---
 // Fallback access point if WiFi connection fails
 #define AP_SSID         "ESP32CAM-ONVIF"
 #define AP_PASSWORD     "esp32cam"      // Min 8 characters
+
+// --- Security ---
+// Credentials for the Web Configuration Interface
+#define WEB_USER        "admin"
+#define WEB_PASS        "esp123"
+
+// --- Static IP Settings (Optional) ---
+#define STATIC_IP_ENABLED   false       // Set to true to use Static IP
+#define STATIC_IP_ADDR      192,168,1,100
+#define STATIC_GATEWAY      192,168,1,1
+#define STATIC_SUBNET       255,255,255,0
+#define STATIC_DNS          8,8,8,8
 
 // --- Server Ports ---
 #define WEB_PORT        80              // Web configuration interface
@@ -33,6 +43,12 @@
 #define FLASH_LED_ENABLED true          // Set to false to enable 4-bit SD mode
 #define FLASH_LED_PIN     4
 #define FLASH_LED_INVERT false          // false = High is ON
+#define DEFAULT_AUTO_FLASH false        // Auto-flash disabled by default
+
+// --- Status LED Settings ---
+#define STATUS_LED_ENABLED true         // Set to false to disable Blue LED
+#define STATUS_LED_PIN     33           // On-board Status LED (usually GPIO 33)
+#define STATUS_LED_INVERT  true         // true = Low is ON (Standard for Blue LED)
 
 // --- PTZ (Servo) Settings ---
 // Optional: Connect servos for Pan/Tilt control
@@ -44,16 +60,12 @@
 #define ENABLE_DAILY_RECORDING  false   // If true, records continuously (loop overwrite)
 #define RECORD_SEGMENT_SEC      300     // 5 minutes per file
 #define MAX_DISK_USAGE_PCT      90      // Auto-delete oldest files if disk usage > 90%
-
-// --- Security ---
-// Credentials for the Web Configuration Interface
-#define WEB_USER        "admin"
-#define WEB_PASS        "esp123"
+#define ENABLE_MOTION_DETECTION false    // Set false to disable motion detection to save CPU
 
 // --- Device Information (ONVIF) ---
 // These appear in your DVR/NVR during discovery
-#define DEVICE_MANUFACTURER "ESP32-CAM-J0X"
-#define DEVICE_MODEL        "ONVIF-ESPCAM"
+#define DEVICE_MANUFACTURER "John-Varghese-EH"
+#define DEVICE_MODEL        "ESP32-CAM-ONVIF"
 #define DEVICE_VERSION      "1.0"
 #define DEVICE_SERIAL       "J0X-00001"
 #define DEVICE_HARDWARE_ID  "ESP32CAM-J0X"
