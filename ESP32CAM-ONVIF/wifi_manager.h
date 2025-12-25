@@ -52,8 +52,6 @@ private:
   
   // Constants
   const char* _credentialsFile = "/wifi_creds.json";
-  const char* _apSSID = "ESP32CAM-ONVIF";
-  const char* _apPassword = "esp32cam";
 };
 
 // Global instance

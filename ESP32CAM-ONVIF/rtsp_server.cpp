@@ -1,11 +1,12 @@
 #include "rtsp_server.h"
+#include "config.h"
 
-WiFiServer rtspServer(554);
+WiFiServer rtspServer(RTSP_PORT);
 MyStreamer *streamer = nullptr;
 CRtspSession *session = nullptr; // Keep track of the current session
 
 String getRTSPUrl() {
-  return "rtsp://" + WiFi.localIP().toString() + ":554/mjpeg/1";
+  return "rtsp://" + WiFi.localIP().toString() + ":" + String(RTSP_PORT) + "/mjpeg/1";
 }
 
 void rtsp_server_start() {

@@ -5,7 +5,7 @@
 #include <WebServer.h>
 #include "config.h"
 
-WebServer onvifServer(8000);
+WebServer onvifServer(ONVIF_PORT);
 WiFiUDP onvifUDP;
 
 String getCapabilitiesResponse() {
@@ -18,7 +18,7 @@ String getCapabilitiesResponse() {
     "<tds:GetCapabilitiesResponse>"
     "<tds:Capabilities>"
     "<tds:Media>"
-    "<tds:XAddr>http://" + ip + ":8000/onvif/device_service</tds:XAddr>"
+    "<tds:XAddr>http://" + ip + ":" + String(ONVIF_PORT) + "/onvif/device_service</tds:XAddr>"
     "</tds:Media>"
     "</tds:Capabilities>"
     "</tds:GetCapabilitiesResponse>"
@@ -33,11 +33,11 @@ String getDeviceInfoResponse() {
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
     "<SOAP-ENV:Body>"
     "<tds:GetDeviceInformationResponse>"
-    "<tds:Manufacturer>ESP32-CAM-J0X</tds:Manufacturer>"
-    "<tds:Model>ONVIF-ESPCAM</tds:Model>"
-    "<tds:FirmwareVersion>1.0</tds:FirmwareVersion>"
-    "<tds:SerialNumber>J0X-00001</tds:SerialNumber>"
-    "<tds:HardwareId>ESP32CAM-J0X</tds:HardwareId>"
+    "<tds:Manufacturer>" DEVICE_MANUFACTURER "</tds:Manufacturer>"
+    "<tds:Model>" DEVICE_MODEL "</tds:Model>"
+    "<tds:FirmwareVersion>" DEVICE_VERSION "</tds:FirmwareVersion>"
+    "<tds:SerialNumber>" DEVICE_SERIAL "</tds:SerialNumber>"
+    "<tds:HardwareId>" DEVICE_HARDWARE_ID "</tds:HardwareId>"
     "</tds:GetDeviceInformationResponse>"
     "</SOAP-ENV:Body>"
     "</SOAP-ENV:Envelope>";
@@ -52,7 +52,7 @@ String getStreamUriResponse() {
     "<SOAP-ENV:Body>"
     "<trt:GetStreamUriResponse>"
     "<trt:MediaUri>"
-    "<tt:Uri>rtsp://" + ip + ":554/mjpeg/1</tt:Uri>"
+    "<tt:Uri>rtsp://" + ip + ":" + String(RTSP_PORT) + "/mjpeg/1</tt:Uri>"
     "<tt:InvalidAfterConnect>false</tt:InvalidAfterConnect>"
     "<tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>"
     "<tt:Timeout>PT0S</tt:Timeout>"
@@ -95,7 +95,7 @@ void handle_onvif_discovery() {
         "<ProbeMatch>"
         "<EndpointReference><Address>urn:uuid:esp32-cam-onvif</Address></EndpointReference>"
         "<Types>dn:NetworkVideoTransmitter</Types>"
-        "<XAddrs>http://" + ip + ":8000/onvif/device_service</XAddrs>"
+        "<XAddrs>http://" + ip + ":" + String(ONVIF_PORT) + "/onvif/device_service</XAddrs>"
         "<Scopes>onvif://www.onvif.org/Profile/Streaming</Scopes>"
         "<MetadataVersion>1</MetadataVersion>"
         "</ProbeMatch>"

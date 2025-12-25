@@ -10,11 +10,12 @@
 #include <ArduinoJson.h>
 #include "esp_camera.h"
 #include "wifi_manager.h"
+#include "config.h"
 
-WebServer webConfigServer(80);
+WebServer webConfigServer(WEB_PORT);
 
-const char* WEB_USER = "admin";
-const char* WEB_PASS = "esp123";
+// WEB_USER and WEB_PASS are defined in config.h
+
 
 bool isAuthenticated(WebServer &server) {
     if (!server.authenticate(WEB_USER, WEB_PASS)) {
@@ -50,7 +51,7 @@ void web_config_start() {
         String json = "{";
         json += "\"status\":\"Online\",";
         json += "\"rtsp\":\"" + getRTSPUrl() + "\",";
-        json += "\"onvif\":\"http://" + WiFi.localIP().toString() + ":8000/onvif/device_service\",";
+        json += "\"onvif\":\"http://" + WiFi.localIP().toString() + ":" + String(ONVIF_PORT) + "/onvif/device_service\",";
         json += "\"motion\":" + String(motion_detected() ? "true" : "false");
         json += "}";
         webConfigServer.send(200, "application/json", json);

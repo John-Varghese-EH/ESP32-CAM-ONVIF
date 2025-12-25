@@ -1,6 +1,7 @@
 #include "wifi_manager.h"
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
+#include "config.h"
 
 // Global instance
 WiFiManager wifiManager;
@@ -12,6 +13,15 @@ bool WiFiManager::begin() {
   // First try to connect using stored credentials
   if (connectToStoredNetwork()) {
     return true;
+  }
+
+  // If stored credentials failed or missing, try hardcoded config.h credentials
+  String configSSID = WIFI_SSID;
+  if(configSSID != "YOUR_WIFI_SSID" && configSSID.length() > 0) {
+      Serial.println("[INFO] Trying config.h credentials...");
+      if(connectToNetwork(WIFI_SSID, WIFI_PASSWORD)) {
+          return true;
+      }
   }
   
   // If stored credentials don't work, start AP mode
@@ -59,7 +69,7 @@ void WiFiManager::startAPMode() {
   Serial.println("[INFO] Starting AP mode");
   _apMode = true;
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(_apSSID, _apPassword);
+  WiFi.softAP(AP_SSID, AP_PASSWORD);
   
   IPAddress IP = WiFi.softAPIP();
   Serial.print("[INFO] AP IP address: ");
@@ -170,7 +180,7 @@ IPAddress WiFiManager::getLocalIP() {
 
 String WiFiManager::getSSID() {
   if (_apMode) {
-    return String(_apSSID);
+    return String(AP_SSID);
   } else {
     return WiFi.SSID();
   }
