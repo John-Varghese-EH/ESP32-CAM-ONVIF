@@ -24,9 +24,14 @@ void rtsp_server_loop() {
     session->handleRequests(0); // 0 timeout means non-blocking
     
     // Broadcast video frame (MJPEG)
+    // THROTTLE: Limit to ~20FPS (50ms) to prevent buffer saturation and CPU hogging
+    static uint32_t lastFrameTime = 0;
     uint32_t now = millis();
-    if(session && !session->m_stopped) { // Verify validity before streaming
-        session->broadcastCurrentFrame(now);
+    if (now - lastFrameTime > 50) { 
+        if(session && !session->m_stopped) { 
+            session->broadcastCurrentFrame(now);
+        }
+        lastFrameTime = now;
     }
 
     // Check if the client has disconnected

@@ -11,6 +11,7 @@
   Made with ❤️ by J0X
 */
 
+
 #include "camera_control.h"
 #include "rtsp_server.h"
 #include "onvif_server.h"
@@ -20,14 +21,14 @@
 #include "config.h"
 #include "wifi_manager.h"
 #include "serial_console.h"
-#include "serial_console.h"
 #include "auto_flash.h"
 #include "status_led.h"
 
 void setup() {
-  Serial.begin(112500);
-  Serial.setDebugOutput(true); // Enable detailed ESP logs
-  delay(3000); // Wait for Serial Monitor
+  // Production speed: 115200. Debug output minimized via platformio.ini
+  Serial.begin(115200);
+  Serial.setDebugOutput(false); 
+  
   Serial.println("\n\n--- ESP32-CAM STARTING ---");
   printBanner();
   
@@ -44,42 +45,46 @@ void setup() {
   if (wifiConnected) {
     rtsp_server_start();
     onvif_server_start();
+    
+    // Start Time Snyc
+    configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET, NTP_SERVER);
+    Serial.println("[INFO] NTP Time Sync started");
   } else {
-    Serial.println("[INFO] WiFi not connected. RTSP and ONVIF services not started.");
-    Serial.println("[INFO] Connect to AP network: " + wifiManager.getSSID());
+    Serial.println("[INFO] WiFi not connected. RTSP/ONVIF disabled.");
+    Serial.println("[INFO] Connect to AP: " + wifiManager.getSSID());
     Serial.println("[INFO] Browse to: http://" + wifiManager.getLocalIP().toString());
   }
   
-  // Initialize other services
+  // Initialize other services (once)
   sd_recorder_init();
   motion_detection_init();
-  motion_detection_init();
-  auto_flash_init(); // Init auto flash before logic starts
+  auto_flash_init(); 
   status_led_init();
-  status_led_flash(1); // One flash -> Init started
+  status_led_flash(1); 
   
-  // Initial Status: Off or Connecting?
-  // WiFi manager will start connecting soon, but we are already past wifiManager.begin()
-  // If wifiConnected is true, set Solid -> Now OFF + Flash
   if(wifiConnected) {
-      status_led_connected(); // Will flash twice and turn off
+      status_led_connected(); 
   }
-  else status_led_wifi_connecting(); // Connection loop will make it blink if needed
+  else status_led_wifi_connecting();
   
-  Serial.println("[INFO] Setup complete. System running.");
+  Serial.println("[INFO] System Ready.");
 }
 
 void loop() {
-  wifiManager.loop(); // Check connection
-  web_config_loop();
-  rtsp_server_loop();
-  onvif_server_loop();
+  // Critical Loops (Keep minimal blocking)
+  rtsp_server_loop();   // Highest priority for streaming
+  wifiManager.loop();   // Connectivity
+  web_config_loop();    // Web UI
+  onvif_server_loop();  // Discovery/SOAP
+  
+  // Background Tasks
   motion_detection_loop();
-  sd_recorder_loop();
-  serial_console_loop();
   sd_recorder_loop();
   serial_console_loop();
   auto_flash_loop();
   status_led_loop();
-  // power management, stats, etc.
+  
+  // Optional: Power saving delay if NO clients connected? 
+  // For RTSP low latency, we usually avoid delay, but a yield() helps watchdog.
+  yield(); 
 }

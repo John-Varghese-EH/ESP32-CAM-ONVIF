@@ -14,6 +14,7 @@
 #include "esp_camera.h"
 #include "wifi_manager.h"
 #include "config.h"
+#include <Update.h>
 
 WebServer webConfigServer(WEB_PORT);
 
@@ -51,6 +52,8 @@ void web_config_start() {
         json += "\"rtsp\":\"" + getRTSPUrl() + "\",";
         json += "\"onvif\":\"http://" + WiFi.localIP().toString() + ":" + String(ONVIF_PORT) + "/onvif/device_service\",";
         json += "\"motion\":" + String(motion_detected() ? "true" : "false") + ",";
+        json += "\"heap\":" + String(ESP.getFreeHeap()) + ",";
+        json += "\"uptime\":" + String(millis() / 1000) + ",";
         json += "\"autoflash\":" + String(auto_flash_is_enabled() ? "true" : "false");
         json += "}";
         webConfigServer.send(200, "application/json", json);
@@ -198,6 +201,51 @@ void web_config_start() {
         // Reset settings logic here
         webConfigServer.send(200, "application/json", "{\"ok\":1}");
         ESP.restart();
+    });
+
+
+
+    // --- Time Sync API ---
+    webConfigServer.on("/api/time", HTTP_POST, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        StaticJsonDocument<64> doc;
+        deserializeJson(doc, webConfigServer.arg("plain"));
+        long epoch = doc["epoch"];
+        if(epoch > 0) {
+            struct timeval tv;
+            tv.tv_sec = epoch;
+            tv.tv_usec = 0;
+            settimeofday(&tv, NULL); 
+            Serial.println("[INFO] Time set via Web");
+            webConfigServer.send(200, "application/json", "{\"ok\":1}");
+        } else {
+             webConfigServer.send(400, "application/json", "{\"error\":\"Invalid time\"}");
+        }
+    });
+
+    // --- OTA Firmware Update ---
+    webConfigServer.on("/api/update", HTTP_POST, []() {
+        webConfigServer.send(200, "application/json", (Update.hasError()) ? "{\"success\":false}" : "{\"success\":true}");
+        delay(1000);
+        ESP.restart();
+    }, []() {
+        HTTPUpload& upload = webConfigServer.upload();
+        if (upload.status == UPLOAD_FILE_START) {
+            Serial.printf("[INFO] Update: %s\n", upload.filename.c_str());
+            if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { 
+                Update.printError(Serial);
+            }
+        } else if (upload.status == UPLOAD_FILE_WRITE) {
+            if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+                Update.printError(Serial);
+            }
+        } else if (upload.status == UPLOAD_FILE_END) {
+            if (Update.end(true)) { 
+                Serial.printf("[INFO] Update Success: %u\n", upload.totalSize);
+            } else {
+                Update.printError(Serial);
+            }
+        }
     });
     
     // --- WiFi API Endpoints ---

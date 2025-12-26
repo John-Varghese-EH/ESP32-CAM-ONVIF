@@ -25,9 +25,9 @@
 #define WEB_PASS        "esp123"
 
 // --- Static IP Settings (Optional) ---
-#define STATIC_IP_ENABLED   false       // Set to true to use Static IP
-#define STATIC_IP_ADDR      192,168,1,100
-#define STATIC_GATEWAY      192,168,1,1
+#define STATIC_IP_ENABLED   true       // Set to true to use Static IP
+#define STATIC_IP_ADDR      192,168,0,150
+#define STATIC_GATEWAY      192,168,0,1
 #define STATIC_SUBNET       255,255,255,0
 #define STATIC_DNS          8,8,8,8
 
@@ -67,8 +67,12 @@
 #define DEVICE_MANUFACTURER "John-Varghese-EH"
 #define DEVICE_MODEL        "ESP32-CAM-ONVIF"
 #define DEVICE_VERSION      "1.0"
-#define DEVICE_SERIAL       "J0X-00001"
 #define DEVICE_HARDWARE_ID  "ESP32CAM-J0X"
+
+// --- Time Settings ---
+#define NTP_SERVER      "pool.ntp.org"
+#define GMT_OFFSET_SEC  19800           // India (UTC+5:30) = 5.5 * 3600 = 19800
+#define DAYLIGHT_OFFSET 0               // No DST in India
 
 // --- Helper Functions ---
 void printBanner();

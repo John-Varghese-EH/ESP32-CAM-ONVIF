@@ -35,12 +35,12 @@ bool camera_init() {
   config.pixel_format = PIXFORMAT_JPEG;
   if(psramFound()){
     config.frame_size = FRAMESIZE_VGA; // 640x480 - Rock Solid Stability for NVRs
-    config.jpeg_quality = 10;          // High quality (lower num)
+    config.jpeg_quality = 12;          // High quality (lower num)
     config.fb_count = 2;
     Serial.println("[INFO] PSRAM found. Using VGA (640x480) and 2 Frame Buffers");
   } else {
-    config.frame_size = FRAMESIZE_VGA;
-    config.jpeg_quality = 15;
+    config.frame_size = FRAMESIZE_VGA; // Non-PSRAM cannot do HD well, fallback to SVGA
+    config.jpeg_quality = 12;
     config.fb_count = 1;
     Serial.println("[WARN] No PSRAM. Using VGA and 1 Frame Buffer");
   }

@@ -61,6 +61,7 @@ inline UDPSOCKET udpsocketcreate(unsigned short portNum)
 // TCP sending
 inline ssize_t socketsend(SOCKET sockfd, const void *buf, size_t len)
 {
+    if(!sockfd) return 0; // Safety guard for TCP
     return sockfd->write((uint8_t *) buf, len);
 }
 

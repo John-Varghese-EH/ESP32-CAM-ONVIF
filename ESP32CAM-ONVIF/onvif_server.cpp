@@ -34,7 +34,7 @@ const char PROGMEM TPL_DEV_INFO[] =
     "<tds:Manufacturer>" DEVICE_MANUFACTURER "</tds:Manufacturer>"
     "<tds:Model>" DEVICE_MODEL "</tds:Model>"
     "<tds:FirmwareVersion>" DEVICE_VERSION "</tds:FirmwareVersion>"
-    "<tds:SerialNumber>" DEVICE_SERIAL "</tds:SerialNumber>"
+    "<tds:SerialNumber>J0X%s</tds:SerialNumber>"
     "<tds:HardwareId>" DEVICE_HARDWARE_ID "</tds:HardwareId>"
     "</tds:GetDeviceInformationResponse>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
@@ -52,17 +52,18 @@ const char PROGMEM TPL_STREAM_URI[] =
     "</trt:GetStreamUriResponse>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
     
-const char PROGMEM TPL_TIME[] =
+// Template for Dynamic Time
+const char PROGMEM TPL_TIME_FMT[] =
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
     "<SOAP-ENV:Body>"
     "<tds:GetSystemDateAndTimeResponse>"
         "<tds:SystemDateAndTime>"
-            "<tt:DateTimeType>Manual</tt:DateTimeType>"
+            "<tt:DateTimeType>NTP</tt:DateTimeType>"
             "<tt:DaylightSavings>false</tt:DaylightSavings>"
-            "<tt:TimeZone><tt:TZ>GMT+00:00</tt:TZ></tt:TimeZone>"
+            "<tt:TimeZone><tt:TZ>IST-5:30</tt:TZ></tt:TimeZone>"
             "<tt:UTCDateTime>"
-                "<tt:Time><tt:Hour>12</tt:Hour><tt:Minute>00</tt:Minute><tt:Second>00</tt:Second></tt:Time>"
-                "<tt:Date><tt:Year>2025</tt:Year><tt:Month>1</tt:Month><tt:Day>1</tt:Day></tt:Date>"
+                "<tt:Time><tt:Hour>%d</tt:Hour><tt:Minute>%d</tt:Minute><tt:Second>%d</tt:Second></tt:Time>"
+                "<tt:Date><tt:Year>%d</tt:Year><tt:Month>%d</tt:Month><tt:Day>%d</tt:Day></tt:Date>"
             "</tt:UTCDateTime>"
         "</tds:SystemDateAndTime>"
     "</tds:GetSystemDateAndTimeResponse>"
@@ -156,40 +157,77 @@ bool verify_soap_header(String &soapReq) {
 }
 
 // Handle SetSystemDateAndTime
+// Helper to calculate UTC Epoch from YMDHMS (Simple, no TZ issues)
+time_t timegm_impl(struct tm *tm) {
+    time_t year = tm->tm_year + 1900;
+    time_t month = tm->tm_mon;
+    if (month > 11) { year += month/12; month %= 12; }
+    else if (month < 0) { int years_diff = (-month + 11)/12; year -= years_diff; month += 12 * years_diff; }
+    int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if(((year%4 == 0) && (year%100 != 0)) || (year%400 == 0)) days_in_month[1] = 29;
+    time_t total_days = 0;
+    for(int y = 1970; y < year; y++) {
+       total_days += (((y%4 == 0) && (y%100 != 0)) || (y%400 == 0)) ? 366 : 365;
+    }
+    for(int m = 0; m < month; m++) {
+       total_days += days_in_month[m];
+    }
+    total_days += tm->tm_mday - 1;
+    return (total_days * 86400) + (tm->tm_hour * 3600) + (tm->tm_min * 60) + tm->tm_sec;
+}
+
 void handle_SetSystemDateAndTime(String &req) {
-    // <tt:UTCDateTime>
-    // <tt:Time><tt:Hour>12</tt:Hour><tt:Minute>34</tt:Minute><tt:Second>56</tt:Second></tt:Time>
-    // <tt:Date><tt:Year>2025</tt:Year><tt:Month>1</tt:Month><tt:Day>2</tt:Day></tt:Date>
-    // </tt:UTCDateTime>
-    
     int container = req.indexOf("UTCDateTime");
+    if (container < 0) container = req.indexOf("DateTime"); // Fallback
+    
     if (container > 0) {
-        int year = 2024; int month = 1; int day = 1;
-        int hour = 0; int min = 0; int sec = 0;
+        int year = 0, month = 0, day = 0, hour = 0, min = 0, sec = 0;
         
-        // Simple Tag parsing
-        if(req.indexOf("<tt:Year>", container) > 0) year = req.substring(req.indexOf("<tt:Year>", container)+9, req.indexOf("</tt:Year>", container)).toInt();
-        if(req.indexOf("<tt:Month>", container) > 0) month = req.substring(req.indexOf("<tt:Month>", container)+10, req.indexOf("</tt:Month>", container)).toInt();
-        if(req.indexOf("<tt:Day>", container) > 0) day = req.substring(req.indexOf("<tt:Day>", container)+8, req.indexOf("</tt:Day>", container)).toInt();
+        // Robust Tag Parsing (Handles optional namespaces)
+        // Helper lambda to find value between tags
+        auto getVal = [&](String tag) -> int {
+            int start = req.indexOf("<" + tag + ">", container); // check <tag>
+            if(start < 0) start = req.indexOf(":" + tag + ">", container); // check :tag>
+            if(start > 0) {
+                int valStart = req.indexOf(">", start) + 1;
+                int valEnd = req.indexOf("<", valStart);
+                return req.substring(valStart, valEnd).toInt();
+            }
+            return 0;
+        };
         
-        if(req.indexOf("<tt:Hour>", container) > 0) hour = req.substring(req.indexOf("<tt:Hour>", container)+9, req.indexOf("</tt:Hour>", container)).toInt();
-        if(req.indexOf("<tt:Minute>", container) > 0) min = req.substring(req.indexOf("<tt:Minute>", container)+11, req.indexOf("</tt:Minute>", container)).toInt();
-        if(req.indexOf("<tt:Second>", container) > 0) sec = req.substring(req.indexOf("<tt:Second>", container)+11, req.indexOf("</tt:Second>", container)).toInt();
-        
-        // Set ESP32 Time
-        struct tm tm;
-        tm.tm_year = year - 1900;
-        tm.tm_mon = month - 1;
-        tm.tm_mday = day;
-        tm.tm_hour = hour;
-        tm.tm_min = min;
-        tm.tm_sec = sec;
-        tm.tm_isdst = 0;
-        time_t t = mktime(&tm);
-        struct timeval now = { .tv_sec = t, .tv_usec = 0 };
-        settimeofday(&now, NULL);
-        
-        Serial.printf("[INFO] Time Synced to: %04d-%02d-%02d %02d:%02d:%02d\n", year, month, day, hour, min, sec);
+        year = getVal("Year");
+        month = getVal("Month");
+        day = getVal("Day");
+        hour = getVal("Hour");
+        min = getVal("Minute");
+        sec = getVal("Second");
+
+        if(year > 2000) {
+            struct tm tm;
+            tm.tm_year = year - 1900;
+            tm.tm_mon = month - 1;
+            tm.tm_mday = day;
+            tm.tm_hour = hour;
+            tm.tm_min = min;
+            tm.tm_sec = sec;
+            
+            // Use timegm to treat input as UTC
+            time_t t = timegm_impl(&tm);
+            struct timeval now = { .tv_sec = t, .tv_usec = 0 };
+            settimeofday(&now, NULL);
+            
+            // Verification Code for User
+            time_t now_check;
+            struct tm timeinfo;
+            time(&now_check);
+            localtime_r(&now_check, &timeinfo);
+            
+            Serial.printf("[INFO] ONVIF Time Sync: UTC %04d-%02d-%02d %02d:%02d:%02d -> Local %04d-%02d-%02d %02d:%02d:%02d\n", 
+                year, month, day, hour, min, sec,
+                timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+        }
     }
 }
 
@@ -212,33 +250,53 @@ void send_soap_fault(WebServer &server, const char* code, const char* subcode, c
 }
 
 // Optimized heap-less send for dynamic content
+// Optimized heap-based send for dynamic content (avoids stack overflow)
 void sendDynamicPROGMEM(WebServer &server, const char* tpl, const char* ip, int port) {
-    char buffer[2048]; // Increased buffer for safety
-    snprintf_P(buffer, sizeof(buffer), PART_HEADER); 
+    char *buffer = new char[2048]; // Heap allocation
+    if (!buffer) {
+        Serial.println("[ERROR] OOM in sendDynamicPROGMEM");
+        server.send(500, "text/plain", "OOM");
+        return;
+    }
+    snprintf_P(buffer, 2048, PART_HEADER); 
     size_t len = strlen(buffer);
-    snprintf_P(buffer + len, sizeof(buffer) - len, tpl, ip, port);
+    snprintf_P(buffer + len, 2048 - len, tpl, ip, port);
     server.send(200, "application/soap+xml", buffer);
+    delete[] buffer;
 }
+
 // Overload for just sending fixed PROGMEM with header
 void sendFixedPROGMEM(WebServer &server, const char* tpl) {
-    char buffer[2048]; // Increased buffer for safety
-    snprintf_P(buffer, sizeof(buffer), PART_HEADER);
-    strncat_P(buffer, tpl, sizeof(buffer) - strlen(buffer) - 1);
+    char *buffer = new char[2048]; // Heap allocation
+    if (!buffer) {
+         Serial.println("[ERROR] OOM in sendFixedPROGMEM");
+         server.send(500, "text/plain", "OOM");
+         return;
+    }
+    snprintf_P(buffer, 2048, PART_HEADER);
+    strncat_P(buffer, tpl, 2048 - strlen(buffer) - 1);
     server.send(200, "application/soap+xml", buffer);
+    delete[] buffer;
 }
 
 // --- New Handlers ---
 
 // Mandatory for many NVRs to link Profile to Source
+// Mandatory for many NVRs to link Profile to Source
+// Now Dynamic to report actual Brightness/Contrast/Color
 const char PROGMEM TPL_VIDEO_SOURCES[] = 
     "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
     "<SOAP-ENV:Body>"
     "<trt:GetVideoSourcesResponse>"
         "<trt:VideoSources token=\"VideoSource_1\">"
             "<tt:Framerate>25.0</tt:Framerate>"
-            "<tt:Resolution><tt:Width>1024</tt:Width><tt:Height>768</tt:Height></tt:Resolution>"
-            "<tt:Imaging><tt:BacklightCompensation><tt:Mode>OFF</tt:Mode></tt:BacklightCompensation>"
-            "<tt:Exposure><tt:Mode>AUTO</tt:Mode></tt:Exposure>"
+            "<tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution>"
+            "<tt:Imaging>"
+                "<tt:BacklightCompensation><tt:Mode>OFF</tt:Mode></tt:BacklightCompensation>"
+                "<tt:Brightness>%d</tt:Brightness>"
+                "<tt:ColorSaturation>%d</tt:ColorSaturation>"
+                "<tt:Contrast>%d</tt:Contrast>"
+                "<tt:Exposure><tt:Mode>AUTO</tt:Mode></tt:Exposure>"
             "</tt:Imaging>"
         "</trt:VideoSources>"
     "</trt:GetVideoSourcesResponse>"
@@ -251,13 +309,91 @@ const char PROGMEM TPL_VIDEO_OPTIONS[] =
     "<trt:GetVideoEncoderConfigurationOptionsResponse>"
         "<trt:Options>"
             "<tt:QualityRange><tt:Min>0</tt:Min><tt:Max>63</tt:Max></tt:QualityRange>"
-            "<tt:JPEG><tt:ResolutionsAvailable><tt:Width>1024</tt:Width><tt:Height>768</tt:Height></tt:ResolutionsAvailable>"
-            "<tt:ResolutionsAvailable><tt:Width>800</tt:Width><tt:Height>600</tt:Height></tt:ResolutionsAvailable>"
+            "<tt:JPEG><tt:ResolutionsAvailable><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:ResolutionsAvailable>"
             "<tt:FrameRateRange><tt:Min>1</tt:Min><tt:Max>30</tt:Max></tt:FrameRateRange>"
             "<tt:EncodingIntervalRange><tt:Min>1</tt:Min><tt:Max>1</tt:Max></tt:EncodingIntervalRange>"
             "</tt:JPEG>"
         "</trt:Options>"
     "</trt:GetVideoEncoderConfigurationOptionsResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+// Specific Configuration Details (Match VGA settings)
+const char PROGMEM TPL_VIDEO_ENCODER_CONFIG[] = 
+    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<trt:GetVideoEncoderConfigurationResponse>"
+        "<trt:Configuration token=\"VideoEncoderToken\">"
+        "<tt:Name>VideoEncoderConfig</tt:Name>"
+        "<tt:UseCount>1</tt:UseCount>"
+        "<tt:Encoding>JPEG</tt:Encoding>"
+        "<tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution>"
+        "<tt:Quality>50</tt:Quality>"
+        "<tt:RateControl><tt:FrameRateLimit>20</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval><tt:BitrateLimit>4096</tt:BitrateLimit></tt:RateControl>"
+        "<tt:Multicast><tt:Address><tt:Type>IPv4</tt:Type><tt:IPv4Address>0.0.0.0</tt:IPv4Address></tt:Address><tt:Port>0</tt:Port><tt:TTL>1</tt:TTL><tt:AutoStart>false</tt:AutoStart></tt:Multicast>"
+        "<tt:SessionTimeout>PT60S</tt:SessionTimeout>"
+        "</trt:Configuration>"
+    "</trt:GetVideoEncoderConfigurationResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_HOSTNAME[] = 
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<tds:GetHostnameResponse>"
+    "<tds:HostnameInformation>"
+       "<tds:FromDHCP>false</tds:FromDHCP>"
+       "<tds:Name>" DEVICE_MODEL "</tds:Name>"
+    "</tds:HostnameInformation>"
+    "</tds:GetHostnameResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+// Audio Stubs (Empty to prevent errors)
+const char PROGMEM TPL_AUDIO_OPTIONS[] = 
+    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<trt:GetAudioEncoderConfigurationOptionsResponse>"
+        "<trt:Options>"
+        "</trt:Options>"
+    "</trt:GetAudioEncoderConfigurationOptionsResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_AUDIO_CONFIG[] = 
+    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<trt:GetAudioEncoderConfigurationResponse>"
+    "</trt:GetAudioEncoderConfigurationResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+// OSD Stubs (Empty to prevent errors)
+const char PROGMEM TPL_OSD_OPTIONS[] = 
+    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<trt:GetOSDOptionsResponse>"
+        "<trt:OSDOptions>"
+        "</trt:OSDOptions>"
+    "</trt:GetOSDOptionsResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_ANALYTICS_CONFIG[] = 
+    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<trt:GetVideoAnalyticsConfigurationsResponse>"
+    "</trt:GetVideoAnalyticsConfigurationsResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+// Network Interfaces (MAC Address)
+const char PROGMEM TPL_NETWORK_INTERFACES[] = 
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<tds:GetNetworkInterfacesResponse>"
+        "<tds:NetworkInterfaces token=\"InterfaceToken\">"
+            "<tt:Enabled>true</tt:Enabled>"
+            "<tt:Info>"
+                "<tt:Name>wlan0</tt:Name>"
+                "<tt:HwAddress>%s</tt:HwAddress>"
+                "<tt:MTU>1500</tt:MTU>"
+            "</tt:Info>"
+        "</tds:NetworkInterfaces>"
+    "</tds:GetNetworkInterfacesResponse>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
 void handle_GetCapabilities() {
@@ -269,12 +405,28 @@ void handle_GetStreamUri() {
 }
 
 void handle_GetSystemDateAndTime() {
-    sendFixedPROGMEM(onvifServer, TPL_TIME);
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    gmtime_r(&now, &timeinfo);
+    
+    char *buffer = new char[1024];
+    if(buffer) {
+        snprintf_P(buffer, 1024, PART_HEADER);
+        size_t len = strlen(buffer);
+        // Note: tm_year is years since 1900, tm_mon is 0-11
+        snprintf_P(buffer + len, 1024 - len, TPL_TIME_FMT, 
+            timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+            timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
+            
+        onvifServer.send(200, "application/soap+xml", buffer);
+        delete[] buffer;
+    } else {
+        onvifServer.send(500, "text/plain", "OOM");
+    }
 }
 
-void handle_GetDeviceInformation() {
-    sendFixedPROGMEM(onvifServer, TPL_DEV_INFO);
-}
+
 
 
 String getServicesResponse() {
@@ -327,8 +479,8 @@ String getProfilesResponse() {
                 "<tt:Name>VideoEncoderConfig</tt:Name>"
                 "<tt:UseCount>1</tt:UseCount>"
                 "<tt:Encoding>JPEG</tt:Encoding>"
-                "<tt:Resolution><tt:Width>1024</tt:Width><tt:Height>768</tt:Height></tt:Resolution>"
-                "<tt:Quality>12</tt:Quality>"
+                "<tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution>"
+                "<tt:Quality>10</tt:Quality>"
             "</tt:VideoEncoderConfiguration>"
             "<tt:PTZConfiguration token=\"PTZToken\">"
                 "<tt:Name>PTZConfig</tt:Name>"
@@ -441,6 +593,7 @@ void handle_onvif_soap() {
   // Debug: Identify Action
   String action = "Unknown";
   if (req.indexOf("GetSystemDateAndTime") > 0) action = "GetSystemDateAndTime";
+  else if (req.indexOf("SetSystemDateAndTime") > 0) action = "SetSystemDateAndTime";
   else if (req.indexOf("GetCapabilities") > 0) action = "GetCapabilities";
   else if (req.indexOf("GetServices") > 0) action = "GetServices";
   else if (req.indexOf("GetDeviceInformation") > 0) action = "GetDeviceInformation";
@@ -449,13 +602,38 @@ void handle_onvif_soap() {
   else if (req.indexOf("GetSnapshotUri") > 0) action = "GetSnapshotUri";
   else if (req.indexOf("GetVideoSources") > 0) action = "GetVideoSources";
   else if (req.indexOf("GetVideoEncoderConfigurationOptions") > 0) action = "GetVideoOptions";
+  else if (req.indexOf("GetVideoEncoderConfiguration") > 0) action = "GetVideoConfig";
+  else if (req.indexOf("GetAudioEncoderConfigurationOptions") > 0) action = "GetAudioOptions";
+  else if (req.indexOf("GetAudioEncoderConfiguration") > 0) action = "GetAudioConfig";
+  else if (req.indexOf("SetVideoEncoderConfiguration") > 0) action = "SetVideoConfig"; // Stub
+  else if (req.indexOf("GetNetworkInterfaces") > 0) action = "GetNetInterfaces";
+  else if (req.indexOf("GetDNS") > 0) action = "GetDNS";
+  else if (req.indexOf("GetNTP") > 0) action = "GetNTP";
+  else if (req.indexOf("GetHostname") > 0) action = "GetHostname";
+  else if (req.indexOf("GetScopes") > 0) action = "GetScopes";
+  else if (req.indexOf("GetNetworkProtocols") > 0) action = "GetNetProtocols";
+
+  else if (req.indexOf("GetOSDOptions") > 0) action = "GetOSDOptions";
+  else if (req.indexOf("GetVideoAnalyticsConfigurations") > 0) action = "GetAnalyticsConfig";
   
-  Serial.println("[INFO] ONVIF Action: " + action);
+  // Clutter Reduction: Only log "Set" actions or less common "Get" actions
+  if (action.startsWith("Set") || action.indexOf("PTZ") >= 0 || action == "Unknown") {
+      Serial.println("[INFO] ONVIF Action: " + action);
+  }
+  // Serial.println("[INFO] ONVIF Action: " + action); // Commented out to reduce noise
 
   if (action == "Unknown") {
-      // Print the request to help debug what the NVR wants
-      Serial.println("[DEBUG] Unknown Request Body (Truncated):");
-      Serial.println(req.substring(0, 600)); 
+      // Find the Body tag to show relevant info without header spam
+      int bodyIdx = req.indexOf("<SOAP-ENV:Body>");
+      if (bodyIdx == -1) bodyIdx = req.indexOf("Body>");
+      
+      if (bodyIdx > 0) {
+          Serial.println("[DEBUG] Unknown Request Body (Clean):");
+          Serial.println(req.substring(bodyIdx, bodyIdx + 400)); // Show 400 chars of BODY only
+      } else {
+          // Fallback if no Body tag found easily
+          // Serial.println(req.substring(0, 200)); 
+      }
   }
 
   if (req.indexOf("GetCapabilities") > 0) {
@@ -479,7 +657,8 @@ void handle_onvif_soap() {
     
     sendDynamicPROGMEM(onvifServer, TPL_SNAPSHOT_URI, WiFi.localIP().toString().c_str(), WEB_PORT);
   } else if (req.indexOf("GetDeviceInformation") > 0) {
-    handle_GetDeviceInformation();
+    // Dynamically insert MAC address as Serial Number for better NVR compatibility
+    sendDynamicPROGMEM(onvifServer, TPL_DEV_INFO, WiFi.macAddress().c_str(), 0); 
   } else if (req.indexOf("GetSystemDateAndTime") > 0) {
     handle_GetSystemDateAndTime();
   } else if (req.indexOf("GetServices") > 0) {
@@ -508,9 +687,9 @@ void handle_onvif_soap() {
         "<trt:Profiles token=\"Profile_1\">"
             "<tt:Name>MainStream</tt:Name>"
             "<tt:VideoSourceConfiguration token=\"VideoSourceToken\">"
-                "<tt:Name>VideoSourceConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:SourceToken>VideoSource_1</tt:SourceToken><tt:Bounds x=\"0\" y=\"0\" width=\"1024\" height=\"768\"/></tt:VideoSourceConfiguration>"
+                "<tt:Name>VideoSourceConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:SourceToken>VideoSource_1</tt:SourceToken><tt:Bounds x=\"0\" y=\"0\" width=\"640\" height=\"480\"/></tt:VideoSourceConfiguration>"
             "<tt:VideoEncoderConfiguration token=\"VideoEncoderToken\">"
-                "<tt:Name>VideoEncoderConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:Encoding>JPEG</tt:Encoding><tt:Resolution><tt:Width>1024</tt:Width><tt:Height>768</tt:Height></tt:Resolution><tt:Quality>12</tt:Quality></tt:VideoEncoderConfiguration>"
+                "<tt:Name>VideoEncoderConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:Encoding>JPEG</tt:Encoding><tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution><tt:Quality>12</tt:Quality></tt:VideoEncoderConfiguration>"
             "<tt:PTZConfiguration token=\"PTZToken\">"
                 "<tt:Name>PTZConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:NodeToken>PTZNodeToken</tt:NodeToken><tt:DefaultContinuousPanTiltVelocitySpace>http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace</tt:DefaultContinuousPanTiltVelocitySpace><tt:DefaultPTZSpeed><tt:PanTilt x=\"1.0\" y=\"1.0\" space=\"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace\"/></tt:DefaultPTZSpeed></tt:PTZConfiguration>"
         "</trt:Profiles>"
@@ -519,15 +698,67 @@ void handle_onvif_soap() {
     sendFixedPROGMEM(onvifServer, TPL_PROFILES);
 
   } else if (req.indexOf("GetVideoSources") > 0) {
-    sendFixedPROGMEM(onvifServer, TPL_VIDEO_SOURCES);
+    // Inject current Sensor values
+    sensor_t * s = esp_camera_sensor_get();
+    // Map -2..2 to 0..100 or similar if needed, but ONVIF is often 0..100.
+    // ESP32Cam standard is -2 to 2. Let's map linearly: -2=0, -1=25, 0=50, 1=75, 2=100
+    // Brightness
+    int br = (s->status.brightness + 2) * 25; 
+    // Contrast
+    int cn = (s->status.contrast + 2) * 25;
+    // Saturation
+    int sa = (s->status.saturation + 2) * 25;
+
+    char *buffer = new char[2048];
+    if(buffer) {
+        snprintf_P(buffer, 2048, PART_HEADER);
+        size_t len = strlen(buffer);
+        snprintf_P(buffer + len, 2048 - len, TPL_VIDEO_SOURCES, br, sa, cn);
+        onvifServer.send(200, "application/soap+xml", buffer);
+        delete[] buffer;
+    } else {
+        onvifServer.send(500, "text/plain", "OOM");
+    }
   } else if (req.indexOf("GetVideoEncoderConfigurationOptions") > 0) {
     sendFixedPROGMEM(onvifServer, TPL_VIDEO_OPTIONS);
+  } else if (req.indexOf("GetVideoEncoderConfiguration") > 0) {
+    sendFixedPROGMEM(onvifServer, TPL_VIDEO_ENCODER_CONFIG);
+  } else if (req.indexOf("GetNetworkInterfaces") > 0) {
+    sendDynamicPROGMEM(onvifServer, TPL_NETWORK_INTERFACES, WiFi.macAddress().c_str(), 0); // Port arg ignored
+  } else if (req.indexOf("GetAudioEncoderConfigurationOptions") > 0) {
+    sendFixedPROGMEM(onvifServer, TPL_AUDIO_OPTIONS); // Return empty options
+  } else if (req.indexOf("GetAudioEncoderConfiguration") > 0) {
+     // Return empty or fault? Empty list is safer for "Not Supported"
+     sendFixedPROGMEM(onvifServer, TPL_AUDIO_CONFIG);
+  } else if (req.indexOf("GetOSDOptions") > 0) {
+     sendFixedPROGMEM(onvifServer, TPL_OSD_OPTIONS);
+  } else if (req.indexOf("GetVideoAnalyticsConfigurations") > 0) {
+     sendFixedPROGMEM(onvifServer, TPL_ANALYTICS_CONFIG);
+  } else if (req.indexOf("GetScopes") > 0) {
+     const char PROGMEM TPL_SCOPES[] = 
+     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+     "<SOAP-ENV:Body>"
+     "<tds:GetScopesResponse>"
+         "<tds:Scopes><tt:ScopeDef>Configurable</tt:ScopeDef><tt:ScopeItem>onvif://www.onvif.org/name/" DEVICE_MODEL "</tt:ScopeItem></tds:Scopes>"
+         "<tds:Scopes><tt:ScopeDef>Fixed</tt:ScopeDef><tt:ScopeItem>onvif://www.onvif.org/type/Network_Video_Transmitter</tt:ScopeItem></tds:Scopes>"
+         "<tds:Scopes><tt:ScopeDef>Fixed</tt:ScopeDef><tt:ScopeItem>onvif://www.onvif.org/hardware/" DEVICE_HARDWARE_ID "</tt:ScopeItem></tds:Scopes>"
+         "<tds:Scopes><tt:ScopeDef>Configurable</tt:ScopeDef><tt:ScopeItem>onvif://www.onvif.org/location/Office</tt:ScopeItem></tds:Scopes>"
+     "</tds:GetScopesResponse>"
+     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+     sendFixedPROGMEM(onvifServer, TPL_SCOPES);
+  } else if (req.indexOf("GetHostname") > 0) {
+     sendFixedPROGMEM(onvifServer, TPL_HOSTNAME);
   } else if (req.indexOf("SetSystemDateAndTime") > 0) {
     handle_SetSystemDateAndTime(req);
     sendFixedPROGMEM(onvifServer, TPL_SET_TIME_RES);
-  } else if (req.indexOf("SetImagingSettings") > 0) {
-    handle_set_imaging_settings(req);
+  } else if (req.indexOf("SetImagingSettings") > 0 || req.indexOf("SetVideoEncoderConfiguration") > 0) {
+    // Acknowledge setting commands with OK (we ignore the actual values to enforce stability)
     onvifServer.send(200, "application/soap+xml", "<ok/>"); 
+  } else if (req.indexOf("GetDNS") > 0 || req.indexOf("GetNTP") > 0 || req.indexOf("GetScopes") > 0 || req.indexOf("GetNetworkProtocols") > 0) {
+     // Return empty valid SOAP-ish OK to suppress errors for optional discovery items
+     // Some NVRs retry endlessly if connection closes without response.
+     // Sending a "Generic Response" is better than connection reset.
+     onvifServer.send(200, "application/soap+xml", "<ok/>");
   } else if (req.indexOf("AbsoluteMove") > 0 || req.indexOf("ContinuousMove") > 0 || req.indexOf("Stop") > 0) {
     handle_ptz(req);
     onvifServer.send(200, "application/soap+xml", "<ok/>");
@@ -541,10 +772,11 @@ void handle_onvif_discovery() {
   if (packetSize) {
     char packet[1024];
     int len = onvifUDP.read(packet, 1024);
-    packet[len] = 0;
-    String pktStr = String(packet);
-    if (pktStr.indexOf("Probe") > 0) {
-      String ip = WiFi.localIP().toString();
+    if(len > 0) {
+        packet[len] = 0;
+        // Optimization: Use strstr on buffer instead of allocating String object
+        if (strstr(packet, "Probe") != nullptr) {
+          String ip = WiFi.localIP().toString();
       
       // WS-Discovery Probe Match Response
       // This is the CRITICAL packet for NVRs to find the camera.
@@ -576,7 +808,9 @@ void handle_onvif_discovery() {
       onvifUDP.endPacket();
     }
   }
-}
+  } // End if(packetSize)
+} // End function
+
 
 void onvif_server_start() {
   onvifServer.on("/onvif/device_service", HTTP_POST, handle_onvif_soap);
