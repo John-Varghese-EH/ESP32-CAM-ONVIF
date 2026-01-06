@@ -11,6 +11,7 @@ enum RTSP_CMD_TYPES
     RTSP_SETUP,
     RTSP_PLAY,
     RTSP_TEARDOWN,
+    RTSP_GET_PARAMETER,
     RTSP_UNKNOWN
 };
 
@@ -52,6 +53,7 @@ private:
     void Handle_RtspDESCRIBE();
     void Handle_RtspSETUP();
     void Handle_RtspPLAY();
+    void Handle_RtspGET_PARAMETER();
 
     // global session state parameters
     int m_RtspSessionID;

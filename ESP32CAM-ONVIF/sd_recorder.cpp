@@ -6,20 +6,31 @@
 #include "config.h"
 #include "wifi_manager.h"
 
-void sd_recorder_init() {
-  bool mountSuccess = false;
+  // static internal flag to track state
+  static bool _sdMountSuccess = false;
+
+  void sd_recorder_init() {
+  _sdMountSuccess = false;
+  
+  // Optimization: Do not init if recording is disabled
+  if (!ENABLE_DAILY_RECORDING) {
+      Serial.println("[INFO] Recording disabled. SD Card Init skipped.");
+      return;
+  }
+
+  bool mountAttempt = false;
   
   if (FLASH_LED_ENABLED) {
     // 1-bit mode to free up GPIO 4 for Flash LED
-    mountSuccess = SD_MMC.begin("/sdcard", true);
-    if(mountSuccess) Serial.println("[INFO] SD Card mounted in 1-bit mode (Flash enabled).");
+    mountAttempt = SD_MMC.begin("/sdcard", true);
+    if(mountAttempt) Serial.println("[INFO] SD Card mounted in 1-bit mode (Flash enabled).");
   } else {
     // 4-bit mode for higher speed (GPIO 4 used for Data 1)
-    mountSuccess = SD_MMC.begin();
-    if(mountSuccess) Serial.println("[INFO] SD Card mounted in 4-bit mode (Flash disabled).");
+    mountAttempt = SD_MMC.begin();
+    if(mountAttempt) Serial.println("[INFO] SD Card mounted in 4-bit mode (Flash disabled).");
   }
 
-  if(!mountSuccess){
+  if(!mountAttempt){
     Serial.println("[WARN] SD Card Mount Failed");
     return;
   }
@@ -29,6 +40,7 @@ void sd_recorder_init() {
     return;
   }
   Serial.println("[INFO] SD Card initialized");
+  _sdMountSuccess = true;
 }
 
 // --- Recording Globals ---
@@ -36,6 +48,7 @@ unsigned long _lastRecordFrame = 0;
 unsigned long _currentSegmentStart = 0;
 File _recordFile;
 bool _isRecording = false;
+bool _manualRecording = false; // Flag for manual web trigger
 int _segmentCounter = 0;
 
 void manage_storage() {
@@ -90,8 +103,51 @@ void start_new_segment() {
     }
 }
 
+void sd_recorder_stop_segment() {
+    if (_recordFile) {
+        _recordFile.close();
+        Serial.println("[INFO] Stopped recording segment.");
+    }
+    _isRecording = false;
+}
+
+void sd_recorder_start_manual() {
+    if (_manualRecording) return;
+    Serial.println("[INFO] Manual Recording START");
+    _manualRecording = true;
+}
+
+void sd_recorder_stop_manual() {
+    if (!_manualRecording) return;
+    Serial.println("[INFO] Manual Recording STOP");
+    _manualRecording = false;
+    // Immediate stop
+    sd_recorder_stop_segment();
+}
+
+bool sd_recorder_is_recording() {
+    return _manualRecording || (ENABLE_DAILY_RECORDING && _sdMountSuccess);
+}
+
+bool sd_recorder_is_mounted() {
+    return _sdMountSuccess;
+}
+
 void sd_recorder_loop() {
-    if (!ENABLE_DAILY_RECORDING) return;
+    // CRITICAL FIX: Do not attempt to record if SD mount failed.
+    if (!_sdMountSuccess) return;
+
+    // Check if we should be recording
+    bool shouldRecord = ENABLE_DAILY_RECORDING || _manualRecording;
+    
+    if (!shouldRecord) {
+        // Ensure we aren't leaving a file open if we just stopped
+        if (_isRecording) {
+            sd_recorder_stop_segment();
+        }
+        return;
+    }
+
     if (FLASH_LED_ENABLED && !wifiManager.isInAPMode()) { 
         // Optional optimization: disable recording during heavy WiFi use if causing instability?
         // But user wants "even if connection fails".
@@ -99,7 +155,7 @@ void sd_recorder_loop() {
 
     unsigned long now = millis();
     
-    // 1. Check segment time
+    // 1. Check segment time (only if we are actively recording)
     if (_isRecording && (now - _currentSegmentStart > (RECORD_SEGMENT_SEC * 1000))) {
         start_new_segment();
     }

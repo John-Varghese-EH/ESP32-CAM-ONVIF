@@ -1,7 +1,5 @@
-
 #include <Arduino.h>
 #include "camera_control.h"
-#define CAM_TASK_STACK_SIZE 16384
 #define CAM_TASK_STACK_SIZE 16384
 #include "esp_camera.h"
 #include "config.h"
@@ -37,12 +35,12 @@ bool camera_init() {
     config.frame_size = FRAMESIZE_VGA; // 640x480 - Rock Solid Stability for NVRs
     config.jpeg_quality = 12;          // High quality (lower num)
     config.fb_count = 2;
-    Serial.println("[INFO] PSRAM found. Using VGA (640x480) and 2 Frame Buffers");
+    Serial.println(F("[INFO] PSRAM found. Using VGA (640x480) and 2 Frame Buffers"));
   } else {
     config.frame_size = FRAMESIZE_VGA; // Non-PSRAM cannot do HD well, fallback to SVGA
     config.jpeg_quality = 12;
     config.fb_count = 1;
-    Serial.println("[WARN] No PSRAM. Using VGA and 1 Frame Buffer");
+    Serial.println(F("[WARN] No PSRAM. Using VGA and 1 Frame Buffer"));
   }
   
   // config.frame_size = FRAMESIZE_QVGA; // Reduce frame size to save memory // OLD FRAME SIZE

@@ -15,6 +15,8 @@
 #include "wifi_manager.h"
 #include "config.h"
 #include <Update.h>
+#include <esp_task_wdt.h>
+#include "sd_recorder.h"
 
 WebServer webConfigServer(WEB_PORT);
 
@@ -49,9 +51,11 @@ void web_config_start() {
         String json = "{";
         json += "\"status\":\"Online\",";
         json += "\"rtsp\":\"" + getRTSPUrl() + "\",";
-        json += "\"rtsp\":\"" + getRTSPUrl() + "\",";
         json += "\"onvif\":\"http://" + WiFi.localIP().toString() + ":" + String(ONVIF_PORT) + "/onvif/device_service\",";
+        json += "\"onvif_enabled\":" + String(onvif_is_enabled() ? "true" : "false") + ",";
         json += "\"motion\":" + String(motion_detected() ? "true" : "false") + ",";
+        json += "\"recording\":" + String(sd_recorder_is_recording() ? "true" : "false") + ",";
+        json += "\"sd_mounted\":" + String(sd_recorder_is_mounted() ? "true" : "false") + ",";
         json += "\"heap\":" + String(ESP.getFreeHeap()) + ",";
         json += "\"uptime\":" + String(millis() / 1000) + ",";
         json += "\"autoflash\":" + String(auto_flash_is_enabled() ? "true" : "false");
@@ -159,10 +163,20 @@ void web_config_start() {
         }
     });
 
-    // --- SD Recording Trigger (stub) ---
+    // --- SD Recording Trigger ---
     webConfigServer.on("/api/record", HTTP_POST, []() {
         if (!isAuthenticated(webConfigServer)) return;
-        // Start/stop SD recording logic here
+        
+        StaticJsonDocument<128> doc;
+        deserializeJson(doc, webConfigServer.arg("plain"));
+        String action = doc["action"];
+        
+        if (action == "start") {
+            sd_recorder_start_manual();
+        } else if (action == "stop") {
+            sd_recorder_stop_manual();
+        }
+        
         webConfigServer.send(200, "application/json", "{\"ok\":1}");
     });
 
@@ -187,11 +201,22 @@ void web_config_start() {
         auto_flash_set_enabled(enabled);
         webConfigServer.send(200, "application/json", "{}");
     });
+    
+    // --- ONVIF Enable/Disable ---
+    webConfigServer.on("/api/onvif/toggle", HTTP_POST, []() {
+        if (!isAuthenticated(webConfigServer)) return;
+        StaticJsonDocument<64> doc;
+        deserializeJson(doc, webConfigServer.arg("plain"));
+        bool enabled = doc["enabled"];
+        onvif_set_enabled(enabled);
+        webConfigServer.send(200, "application/json", "{}");
+    });
 
     // --- Reboot ---
-    webConfigServer.on("/api/reboot", HTTP_POST, []() {
+    webConfigServer.on("/reboot", []() {
         if (!isAuthenticated(webConfigServer)) return;
-        webConfigServer.send(200, "application/json", "{\"ok\":1}");
+        webConfigServer.send(200, "application/json", "{\"ok\":1, \"msg\":\"Rebooting...\"}");
+        delay(1000);
         ESP.restart();
     });
 
@@ -319,19 +344,62 @@ void web_config_start() {
     webConfigServer.on("/stream", HTTP_GET, []() {
         if (!isAuthenticated(webConfigServer)) return;
         WiFiClient client = webConfigServer.client();
+        
         String response = "HTTP/1.1 200 OK\r\n";
-        response += "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n";
+        response += "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n";
+        response += "Access-Control-Allow-Origin: *\r\n";
+        response += "\r\n";
         client.print(response);
 
+        Serial.println("[INFO] MJPEG Stream started");
+        
+        // Optimize TCP for streaming
+        client.setTimeout(2); // Set low timeout for writes (2s) to prevent blocking
+        
+        int64_t last_frame = 0;
+        const int frame_interval = 100; // 100ms = ~10 FPS
+
         while (client.connected()) {
+            // CRITICAL: Feed the Watchdog Timer so the ESP32 doesn't reboot
+            esp_task_wdt_reset();
+            
+            // Keep critical background tasks alive (God Loop Pattern)
+            rtsp_server_loop();   
+            onvif_server_loop();
+            
+            int64_t now = esp_timer_get_time() / 1000;
+            if (now - last_frame < frame_interval) {
+                // Yield to allow WiFi stack to process
+                yield(); 
+                delay(10); // Sleep 10ms to save CPU
+                continue;
+            }
+            last_frame = now;
+
             camera_fb_t *fb = esp_camera_fb_get();
-            if (!fb) continue;
-            client.printf("--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n", fb->len);
-            client.write(fb->buf, fb->len);
+            if (!fb) {
+                Serial.println("[WARN] Frame buffer failed");
+                delay(100);
+                continue;
+            }
+            
+            // Send buffer using chunked writes if needed, but client.write handles it.
+            // Check if we can write to avoid stalling on full buffer
+            // (Standard Client doesn't expose availableForWrite easily on all cores, but write() is blocking with timeout)
+            
+            size_t hlen = client.printf("--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n", fb->len);
+            size_t wlen = client.write(fb->buf, fb->len);
             client.print("\r\n");
-            esp_camera_fb_return(fb);
-            delay(100); // ~10 fps
+            
+            esp_camera_fb_return(fb); // Release immediately
+            
+            if (wlen != fb->len) {
+                 Serial.println("[WARN] Stream write failed (Client disconnected?)");
+                 break;
+            }
         }
+        
+        Serial.println("[INFO] MJPEG Stream stopped");
     });
 
     // --- Snapshot endpoint ---

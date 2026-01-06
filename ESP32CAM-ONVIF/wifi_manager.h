@@ -45,6 +45,9 @@ public:
   String getSSID();
   // int getScannedNetworksCount(); // Removed duplicate
   
+  // Connectivity check helper
+  bool checkConnectivity();
+  
   void loop(); // Handle reconnection
   
 private:
@@ -52,6 +55,10 @@ private:
   int _scannedNetworksCount;
   WiFiNetwork* _scannedNetworks;
   unsigned long _lastConnectAttempt;
+  
+  // Stability Tracking
+  unsigned long _lastConnectedTime; // Last time we had a valid connection
+  const unsigned long _wifiTimeoutMs = 300000; // 5 minutes timeout for auto-reboot
   
   // Constants
   const char* _credentialsFile = "/wifi_creds.json";

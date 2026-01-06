@@ -7,25 +7,43 @@
 // Global instance
 WiFiManager wifiManager;
 
-WiFiManager::WiFiManager() : _apMode(false), _scannedNetworksCount(0), _scannedNetworks(nullptr), _lastConnectAttempt(0) {
+WiFiManager::WiFiManager() : _apMode(false), _scannedNetworksCount(0), _scannedNetworks(nullptr), _lastConnectAttempt(0), _lastConnectedTime(0) {
 }
 
 void WiFiManager::loop() {
     if (_apMode) return;
     
-    // Simple non-blocking reconnection
-    if (WiFi.status() != WL_CONNECTED) {
-        status_led_error(); // Indicate lost connection
-        if (millis() - _lastConnectAttempt > 10000) {
-            _lastConnectAttempt = millis();
-            Serial.println("[INFO] WiFi Lost. Reconnecting...");
+    // Check connectivity
+    if (checkConnectivity()) {
+        status_led_connected();
+        _lastConnectedTime = millis(); // Refresh timestamp
+    } else {
+        status_led_error();
+        
+        unsigned long now = millis();
+        
+        // 1. Aggressive Reconnect Attempt
+        if (now - _lastConnectAttempt > 10000) {
+            _lastConnectAttempt = now;
+            Serial.println(F("[WARN] WiFi Lost. Reconnecting..."));
             status_led_wifi_connecting();
+            
+            // Force disconnect first to clear stuck states
+            WiFi.disconnect();
             WiFi.reconnect();
         }
-    } else {
-        // If back online, ensure LED is solid
-        status_led_connected();
+        
+        // 2. Fatal Timeout -> Reboot
+        if (now - _lastConnectedTime > _wifiTimeoutMs) {
+            Serial.printf("[FATAL] No WiFi for %lu ms. Rebooting for stability...\n", _wifiTimeoutMs);
+            delay(1000);
+            ESP.restart();
+        }
     }
+}
+
+bool WiFiManager::checkConnectivity() {
+    return WiFi.status() == WL_CONNECTED;
 }
 
 bool WiFiManager::begin() {
@@ -38,7 +56,7 @@ bool WiFiManager::begin() {
   status_led_wifi_connecting();
   String configSSID = WIFI_SSID;
   if(configSSID != "YOUR_WIFI_SSID" && configSSID.length() > 0) {
-      Serial.println("[INFO] Trying config.h credentials...");
+      Serial.println(F("[INFO] Trying config.h credentials..."));
       if(connectToNetwork(WIFI_SSID, WIFI_PASSWORD)) {
           return true;
       }
@@ -53,7 +71,7 @@ bool WiFiManager::connectToStoredNetwork() {
   WiFiCredentials creds = loadCredentials();
   
   if (creds.ssid.length() == 0) {
-    Serial.println("[INFO] No stored WiFi credentials found");
+    Serial.println(F("[INFO] No stored WiFi credentials found"));
     return false;
   }
   
@@ -75,14 +93,14 @@ bool WiFiManager::connectToNetwork(const String& ssid, const String& password) {
     if (WiFi.config(ip, gateway, subnet, dns)) {
       Serial.println("[INFO] Static IP Configured: " + ip.toString());
     } else {
-      Serial.println("[WARN] Static IP Configuration Failed. Falling back to DHCP.");
+      Serial.println(F("[WARN] Static IP Configuration Failed. Falling back to DHCP."));
     }
   }
   
   WiFi.begin(ssid.c_str(), password.c_str());
   status_led_wifi_connecting();
   
-  Serial.print("[INFO] Connecting to WiFi: ");
+  Serial.print(F("[INFO] Connecting to WiFi: "));
   Serial.println(ssid);
   
   // Wait for connection
@@ -98,21 +116,21 @@ bool WiFiManager::connectToNetwork(const String& ssid, const String& password) {
     status_led_connected();
     return true;
   } else {
-    Serial.println("\n[ERROR] WiFi connect failed.");
+    Serial.println(F("\n[ERROR] WiFi connect failed."));
     status_led_error();
     return false;
   }
 }
 
 void WiFiManager::startAPMode() {
-  Serial.println("[INFO] Starting AP mode");
+  Serial.println(F("[INFO] Starting AP mode"));
   status_led_wifi_connecting(); 
   _apMode = true;
   WiFi.mode(WIFI_AP);
   WiFi.softAP(AP_SSID, AP_PASSWORD);
   
   IPAddress IP = WiFi.softAPIP();
-  Serial.print("[INFO] AP IP address: ");
+  Serial.print(F("[INFO] AP IP address: "));
   Serial.println(IP);
 }
 

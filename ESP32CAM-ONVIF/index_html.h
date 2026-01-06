@@ -5,394 +5,480 @@ const char index_html[] PROGMEM = R"rawliteral(
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ESP32-CAM ONVIF PRO</title>
+    <title>ESP32-CAM ONVIF</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#000000">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="data:,">
     <style>
-        :root{
-            --bg: #0f172a;
-            --surface: #1e293b;
-            --surface-hover: #334155;
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
-            --accent: #8b5cf6;
-            --text: #f1f5f9;
-            --text-mut: #94a3b8;
-            --border: #334155;
+        :root {
+            --bg-color: #050510;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-blur: 20px;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.6);
+            --accent: #d946ef;
+            --accent-glow: rgba(217, 70, 239, 0.5); 
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
             --success: #10b981;
             --danger: #ef4444;
-            --rad: 12px;
-            --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-            --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --radius: 16px;
         }
-        *{box-sizing:border-box}
-        body{
-            font-family: var(--font);
-            background: var(--bg);
-            color: var(--text);
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.25), transparent 40%), /* Blue-ish */
+                radial-gradient(circle at 90% 80%, rgba(217, 70, 239, 0.35), transparent 40%), /* Stronger Purple */
+                radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.1), transparent 60%); /* Center subtle glow */
+            color: var(--text-main);
             margin: 0;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow-x: hidden;
         }
-        /* Top Navigation */
-        header{
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border);
-            padding: 0.8rem 1.2rem;
+
+        /* --- Glassmorphism Components --- */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+        }
+
+        /* --- Header --- */
+        header {
             position: sticky;
             top: 0;
-            z-index: 50;
+            z-index: 100;
+            padding: 1rem 1.5rem;
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
+            background: rgba(5, 5, 16, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--glass-border);
         }
-        .brand{
+
+        .brand {
             font-size: 1.25rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--primary), var(--accent));
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .status-badge{
+
+        .status-pill {
             font-size: 0.75rem;
-            padding: 0.25rem 0.75rem;
+            padding: 4px 12px;
             border-radius: 99px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            color: var(--text-mut);
-            font-weight: 500;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 6px;
         }
-        .status-dot{width:8px;height:8px;border-radius:50%;background:var(--text-mut)}
-        .status-dot.online{background:var(--success);box-shadow:0 0 8px var(--success)}
+        .status-pill.offline {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity 0.5; } 100% { opacity: 1; } }
 
-        /* Layout */
-        main{
+        /* --- Layout --- */
+        main {
             flex: 1;
             width: 100%;
             max-width: 1200px;
             margin: 0 auto;
             padding: 1.5rem;
         }
-        
-        /* Tabs */
-        .tabs{
+
+        /* --- Tabs --- */
+        .tabs {
             display: flex;
-            gap: 0.5rem;
-            overflow-x: auto;
-            padding-bottom: 0.5rem;
+            gap: 8px;
             margin-bottom: 1.5rem;
-            -webkit-overflow-scrolling: touch;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
         }
-        .tab-btn{
+        .tabs::-webkit-scrollbar { display: none; }
+
+        .tab-btn {
             background: transparent;
-            color: var(--text-mut);
             border: none;
-            padding: 0.75rem 1.25rem;
-            border-radius: var(--rad);
-            font-weight: 600;
-            font-size: 0.95rem;
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.2s;
             white-space: nowrap;
         }
-        .tab-btn:hover{background: var(--surface-hover); color: var(--text)}
-        .tab-btn.active{
-            background: var(--surface);
-            color: var(--primary);
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
+        .tab-btn.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
 
-        /* Panels */
-        .panel{display:none; animation: fadeUp 0.3s ease-out}
-        .panel.active{display:block}
-
-        /* Video Feed */
-        .video-wrapper{
+        /* --- Video Feed --- */
+        .video-container {
+            position: relative;
             background: #000;
-            border-radius: var(--rad);
+            border-radius: var(--radius);
             overflow: hidden;
             aspect-ratio: 16/9;
-            position: relative;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
-            max-width: 800px;
-            margin: 0 auto 1.5rem auto;
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
+            border: 1px solid var(--glass-border);
+            margin-bottom: 2rem;
         }
-        .video-feed{
+        
+        .video-feed {
             width: 100%;
             height: 100%;
             object-fit: contain;
             display: block;
         }
-        .video-overlay{
+
+        .video-controls {
             position: absolute;
             bottom: 0; left: 0; right: 0;
             padding: 1rem;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
             display: flex;
             justify-content: center;
-            gap: 0.5rem;
+            gap: 1rem;
             opacity: 0;
-            transition: opacity 0.3s;
+            transition: opacity 0.3s ease;
         }
-        .video-wrapper:hover .video-overlay{opacity: 1}
-
-        /* Controls Grid */
-        .grid{
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
-        }
-        .card{
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--rad);
-            padding: 1.5rem;
-            box-shadow: var(--shadow);
-        }
-        .card h3{
-            margin: 0 0 1rem 0;
-            font-size: 1.1rem;
-            color: var(--text);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        /* Forms */
-        .form-group{margin-bottom: 1rem}
-        .form-label{display:block; font-size: 0.85rem; color: var(--text-mut); margin-bottom: 0.4rem}
-        .form-control{
-            width: 100%;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 0.6rem;
-            border-radius: 6px;
-            font-size: 0.95rem;
-            transition: border-color 0.2s;
-        }
-        .form-control:focus{outline:none; border-color: var(--primary)}
+        .video-container:hover .video-controls { opacity: 1; }
         
-        /* Buttons */
-        .btn{
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 0.6rem 1.2rem;
-            border-radius: 6px;
-            font-weight: 600;
+        /* On mobile, always show controls briefly on tap, or keep minimal */
+        @media(max-width: 768px) {
+            .video-controls { opacity: 1 !important; padding: 0.8rem; }
+        }
+
+        /* Fullscreen Mode */
+        .video-container.fullscreen {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 1000;
+            border-radius: 0;
+            margin: 0;
+        }
+
+        /* --- Interactives --- */
+        .btn {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
-            display: inline-flex;
+            display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 8px;
+            font-family: inherit;
         }
-        .btn:hover{background: var(--primary-hover); transform: translateY(-1px)}
-        .btn:disabled{opacity: 0.6; cursor: not-allowed}
-        .btn.outline{background: transparent; border: 1px solid var(--border); color: var(--text)}
-        .btn.outline:hover{background: var(--surface-hover)}
-        .btn.danger{background: var(--danger)}
-        .btn.sm{padding: 0.4rem 0.8rem; font-size: 0.85rem}
-        .btn.w-full{width: 100%}
+        .btn:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        
+        .btn-primary {
+            background: var(--primary);
+            border-color: transparent;
+            box-shadow: 0 0 20px -5px var(--primary-glow);
+        }
+        .btn-primary:hover {
+            background: #4f46e5;
+            box-shadow: 0 0 25px -5px var(--primary-glow);
+        }
+        
+        .btn-icon { padding: 8px; border-radius: 50%; width: 40px; height: 40px; }
 
-        /* Range Slider */
+        /* --- Grid & Cards --- */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .card h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* --- Key Value Groups --- */
+        .kv-group { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .kv-group:last-child { border: none; }
+        .label { color: var(--text-muted); font-size: 0.9rem; }
+        .value { font-weight: 500; font-family: monospace; }
+
+        /* --- Inputs --- */
+        .input-group { margin-bottom: 0.5rem; }
+        .input-label { display: block; color: var(--text-muted); margin-bottom: 6px; font-size: 0.85rem; }
+        .form-control {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: inherit;
+        }
+        .form-control:focus { outline: none; border-color: var(--primary); }
+
+        /* Sliders */
         input[type=range] {
             width: 100%;
-            height: 6px;
-            background: var(--bg);
-            border-radius: 3px;
-            outline: none;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
             -webkit-appearance: none;
         }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
+            width: 16px; height: 16px; border-radius: 50%;
             background: var(--primary);
             cursor: pointer;
-            border: 2px solid var(--surface);
+            box-shadow: 0 0 10px var(--primary);
         }
 
-        /* Utility */
-        .text-sm{font-size: 0.85rem}
-        .text-mut{color: var(--text-mut)}
-        .flex-row{display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem}
-        .badge{padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; background: var(--bg)}
-        
-        /* WiFi List */
-        .wifi-list{display:flex; flex-direction: column; gap: 0.5rem}
-        .wifi-item{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.8rem;
-            background: var(--bg);
+        /* --- WiFi List --- */
+        .wifi-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
             border-radius: 8px;
-            border: 1px solid var(--border);
+            margin-bottom: 8px;
         }
+        .wifi-sig { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* Util */
+        .panel { display: none; animation: fade 0.3s ease; }
+        .panel.active { display: block; }
+        @keyframes fade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        @media(max-width: 600px){
-            main{padding: 1rem}
-            .grid{grid-template-columns: 1fr}
+        /* Rec Toast */
+        .rec-toast {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(16, 185, 129, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateX(-50%) translateY(10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 20;
+        }
+        .rec-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        
+        @media(max-width: 600px) {
+            main { padding: 1rem; }
+            .grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="brand">ESP32-CAM ONVIF</div>
-    <div class="status-badge" id="connStatus">
-        <div class="status-dot"></div> <span id="statusText">Offline</span>
+    <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        ESP32-CAM ONVIF <sub>Web Interface</sub>
+    </div>
+    <div class="status-pill" id="status-pill">
+        <div class="dot pulse"></div>
+        <span id="status-text">Connecting...</span>
     </div>
 </header>
 
 <main>
-    <nav class="tabs">
-        <button class="tab-btn active" onclick="setTab('dashboard')">📊 Dashboard</button>
-        <button class="tab-btn" onclick="setTab('camera')">⚙️ Camera</button>
-        <button class="tab-btn" onclick="setTab('wifi')">📡 WiFi</button>
-        <button class="tab-btn" onclick="setTab('system')">🔧 System</button>
-    </nav>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="setTab('dash')">Dashboard</button>
+        <button class="tab-btn" onclick="setTab('cam')">Camera</button>
+        <button class="tab-btn" onclick="setTab('net')">Network</button>
+        <button class="tab-btn" onclick="setTab('sys')">System</button>
+    </div>
 
-    <!-- DASHBOARD -->
-    <div id="tab-dashboard" class="panel active">
-        <div class="video-wrapper">
-            <img id="stream" class="video-feed" src="" alt="Stream Paused">
-            <div class="video-overlay">
-                <button class="btn sm" onclick="toggleStream()">⏯ Play/Pause</button>
-                <button class="btn sm" onclick="downloadSnapshot()">📸 Download Snap</button>
-                <button class="btn sm" id="btn-flash" onclick="toggleFlash()">⚡ Flash</button>
+    <!-- PANEL: DASHBOARD -->
+    <div id="tab-dash" class="panel active">
+        <div class="video-container glass-panel" id="vcont">
+            <img id="stream" class="video-feed" src="" alt="Connecting..." crossorigin="anonymous">
+            <div id="rec-toast" class="rec-toast">Recording Started</div>
+            <div class="video-controls">
+                <button class="btn btn-icon glass-panel" onclick="toggleStream()" title="Play/Pause">⏯</button>
+                <button class="btn btn-icon glass-panel" id="btn-record" onclick="toggleRecord()" title="Record" style="color:var(--danger)">🔴</button>
+                <button class="btn btn-icon glass-panel" onclick="snap()" title="Snapshot">📸</button>
+                <button class="btn btn-icon glass-panel" id="btn-flash" onclick="toggleFlash()" title="Flash">⚡</button>
+                <button class="btn btn-icon glass-panel" onclick="toggleFS()" title="Fullscreen">⛶</button>
             </div>
         </div>
 
         <div class="grid">
-            <div class="card">
-                <h3>Quick Stats</h3>
-                <div class="flex-row"><span>Status</span> <span class="badge" id="d-status">-</span></div>
-                <div class="flex-row"><span>Uptime</span> <span class="badge" id="d-uptime">-</span></div>
-                <div class="flex-row"><span>Heap Free</span> <span class="badge" id="d-heap">-</span></div>
-                <div class="flex-row"><span>Motion</span> <span class="badge" id="d-motion">-</span></div>
-                <div class="flex-row"><span>Flash Auto</span> <span class="badge" id="d-autoflash">-</span></div>
+            <!-- Cards unchanged -->
+            <div class="card glass-panel">
+                <h3>System Status</h3>
+                <div class="kv-group"><span class="label">Uptime</span> <span class="value" id="val-uptime">-</span></div>
+                <div class="kv-group"><span class="label">Heap Free</span> <span class="value" id="val-heap">-</span></div>
+                <div class="kv-group"><span class="label">WiFi Signal</span> <span class="value" id="val-rssi">-</span></div>
+                <div class="kv-group"><span class="label">Motion</span> <span class="value" id="val-motion">-</span></div>
             </div>
-            <div class="card">
-                <h3>Stream Info</h3>
-                <div class="form-group">
-                    <span class="form-label">RTSP URL</span>
-                    <input type="text" readonly class="form-control text-sm" id="rtsp-url">
+            
+            <div class="card glass-panel">
+                <h3>Recording Settings</h3>
+                <div class="kv-group">
+                    <span class="label">Storage Location</span>
+                    <select class="form-control" style="width:auto" id="rec-mode">
+                         <option value="device">Device (Client)</option>
+                         <option value="sd">SD Card (Server)</option>
+                    </select>
                 </div>
-                <div class="form-group">
-                    <span class="form-label">ONVIF URL</span>
-                    <input type="text" readonly class="form-control text-sm" id="onvif-url">
+                 <div class="kv-group" id="sd-rec-status-row" style="display:none">
+                    <span class="label">SD Status</span>
+                    <span class="value" id="sd-status">Ready</span>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- CAMERA SETTINGS -->
-    <div id="tab-camera" class="panel">
+    
+    <!-- ... Skipping Middle Panels ... -->
+    <!-- PANEL: CAMERA -->
+    <div id="tab-cam" class="panel">
         <div class="grid">
-            <div class="card">
-                <h3>Image Adjustments</h3>
-                <div class="form-group">
-                    <div class="flex-row"><span>Resolution</span> <span class="text-mut text-sm">Force VGA for Reliability</span></div>
+            <div class="card glass-panel">
+                <h3>Image Settings</h3>
+                <div class="input-group">
+                    <span class="input-label">Resolution</span>
                     <select class="form-control" onchange="cfg('resolution', this.value)">
                         <option value="FRAMESIZE_UXGA">UXGA (1600x1200)</option>
                         <option value="FRAMESIZE_SXGA">SXGA (1280x1024)</option>
                         <option value="FRAMESIZE_HD">HD (1280x720)</option>
-                        <option value="FRAMESIZE_SVGA">SVGA (800x600)</option>
-                        <option value="FRAMESIZE_VGA" selected>VGA (640x480)</option>
-                        <option value="FRAMESIZE_CIF">CIF (400x296)</option>
+                        <option value="FRAMESIZE_VGA" selected>VGA (640x480) [Rec.]</option>
+                        <option value="FRAMESIZE_QVGA">QVGA (320x240)</option>
+                        <option value="FRAMESIZE_QVGA">QVGA (320x240)</option>
+                        <option value="FRAMESIZE_QQVGA">QQVGA (160x120)</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <div class="flex-row"><span>Quality</span> <span id="val-quality" class="text-mut">12</span></div>
-                    <input type="range" min="4" max="63" value="12" oninput="el('val-quality').innerText=this.value" onchange="cfg('quality', this.value)">
+                
+                 <div class="input-group">
+                    <div class="flex-row" style="margin-bottom:4px;display:flex;justify-content:space-between">
+                        <span class="input-label">Quality (Lower is Better)</span>
+                        <span class="value" id="lbl-qual">12</span>
+                    </div>
+                    <input type="range" min="4" max="63" value="12" oninput="el('lbl-qual').innerText=this.value" onchange="cfg('quality', this.value)">
                 </div>
-                <div class="form-group">
-                    <div class="flex-row"><span>Brightness</span></div>
+                
+                 <div class="input-group">
+                    <span class="input-label">Brightness</span>
                     <input type="range" min="-2" max="2" value="0" onchange="cfg('brightness', this.value)">
                 </div>
-                <div class="form-group">
-                    <div class="flex-row"><span>Contrast</span></div>
+                 <div class="input-group">
+                    <span class="input-label">Contrast</span>
                     <input type="range" min="-2" max="2" value="0" onchange="cfg('contrast', this.value)">
                 </div>
             </div>
-            
-            <div class="card">
-                <h3>Advanced Features</h3>
-                <div class="flex-row">
+
+            <div class="card glass-panel">
+                <h3>Advanced</h3>
+                 <div class="kv-group">
                     <span>Auto Flash (Night Mode)</span>
-                    <input type="checkbox" id="chk-autoflash" onchange="setAutoFlash(this.checked)">
+                    <input type="checkbox" id="chk-autoflash" onchange="api('/api/autoflash', {method:'POST', body:JSON.stringify({enabled:this.checked})})">
                 </div>
-                <div class="flex-row">
+                 <div class="kv-group">
                     <span>Vertical Flip</span>
                     <input type="checkbox" onchange="cfg('vflip', this.checked ? 1 : 0)">
                 </div>
-                 <div class="flex-row">
+                 <div class="kv-group">
                     <span>Horizontal Mirror</span>
                     <input type="checkbox" onchange="cfg('hmirror', this.checked ? 1 : 0)">
                 </div>
-                <div class="flex-row">
-                    <span>Auto Exposure (AEC)</span>
+                 <div class="kv-group">
+                    <span>Auto Exposure</span>
                     <input type="checkbox" checked onchange="cfg('aec', this.checked ? 1 : 0)">
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- WIFI MANAGER -->
-    <div id="tab-wifi" class="panel">
-        <div class="card">
-            <h3>WiFi Connection</h3>
-            <div class="flex-row" style="margin-bottom: 1rem">
-                <div>Current: <strong id="wifi-current">...</strong></div>
-                <div>IP: <strong id="wifi-ip">...</strong></div>
-            </div>
             
-            <button class="btn w-full" onclick="scanWifi()" id="btn-scan">🔁 Scan Networks</button>
-            
-            <div id="wifi-results" class="wifi-list" style="margin-top: 1.5rem">
-                <!-- Results -->
-            </div>
-        </div>
-    </div>
-
-    <!-- SYSTEM -->
-    <div id="tab-system" class="panel">
-        <div class="grid">
-            <div class="card">
-                <h3>Firmware Update (OTA)</h3>
-                <p class="text-mut text-sm">Select firmware.bin to update device.</p>
-                <form id="ota-form" style="margin-top:1rem">
-                    <input type="file" id="ota-file" class="form-control" accept=".bin">
-                    <div style="height: 10px; background: var(--bg); border-radius: 5px; margin: 1rem 0; overflow: hidden">
-                        <div id="ota-progress" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.2s"></div>
-                    </div>
-                    <button type="button" class="btn w-full" onclick="startOTA()">🚀 Start Update</button>
-                </form>
-            </div>
-            
-            <div class="card">
-                <h3>Device Actions</h3>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap">
-                    <button class="btn danger w-full" onclick="reboot()">🔄 Reboot Device</button>
-                    <button class="btn danger w-full" onclick="reboot()">🔄 Reboot Device</button>
-                     <button class="btn outline w-full" onclick="window.open('/api/sd/list', '_blank')">📂 Browse SD Card</button>
-                     <button class="btn outline w-full" onclick="syncTime()">🕒 Sync Time</button>
+            <div class="card glass-panel" style="border-left: 4px solid var(--primary)">
+                <h3>ONVIF Settings</h3>
+                <div class="kv-group">
+                    <span>Enable ONVIF Service</span>
+                    <input type="checkbox" id="chk-onvif" checked onchange="api('/api/onvif/toggle', {method:'POST', body:JSON.stringify({enabled:this.checked})})">
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- PANEL: NETWORK -->
+    <div id="tab-net" class="panel">
+        <div class="card glass-panel" style="max-width: 600px; margin: 0 auto;">
+            <h3>WiFi Manager</h3>
+           
+            <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                 <div class="kv-group"><span class="label">SSID</span> <span class="value" id="wifi-ssid">...</span></div>
+                 <div class="kv-group"><span class="label">IP Address</span> <span class="value" id="wifi-ip">...</span></div>
+            </div>
+
+            <button class="btn btn-primary" style="width:100%" onclick="scanWifi()" id="btn-scan">Scan Networks</button>
+            <div id="wifi-list" style="margin-top: 1rem;"></div>
+        </div>
+    </div>
+
+    <!-- PANEL: SYSTEM -->
+    <div id="tab-sys" class="panel">
+         <div class="grid">
+            <div class="card glass-panel">
+                <h3>Firmware Update</h3>
+                <p class="label">Upload .bin file to update firmware</p>
+                <input type="file" id="ota-file" class="form-control" accept=".bin" style="margin-bottom: 1rem">
+                <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow:hidden; margin-bottom: 1rem">
+                    <div id="ota-bar" style="width:0%; height:100%; background: var(--primary); transition: width 0.2s"></div>
+                </div>
+                <button class="btn btn-primary" onclick="startOTA()">Start Update</button>
+            </div>
+
+             <div class="card glass-panel">
+                <h3>Power & Storage</h3>
+                <button class="btn" style="margin-bottom:0.5rem" onclick="window.open('/api/sd/list','_blank')">📂 Browse SD Card</button>
+                <button class="btn" style="margin-bottom:0.5rem" onclick="api('/api/time',{method:'POST',body:JSON.stringify({epoch:Math.floor(Date.now()/1000)})}).then(()=>alert('Synced!'))">🕒 Sync Time</button>
+                <button class="btn" style="color:var(--danger); border-color:rgba(239,68,68,0.3)" onclick="if(confirm('Reboot device?')) api('/reboot',{method:'POST'}).then(()=>alert('Rebooting... Device will restart.'))">🔄 Reboot Device</button>
+            </div>
+         </div>
     </div>
 
 </main>
@@ -401,204 +487,304 @@ const char index_html[] PROGMEM = R"rawliteral(
     const el = i => document.getElementById(i);
     const api = async (ep, opts={}) => {
         try {
-            const res = await fetch(ep, opts);
-            if(!res.ok) throw new Error(res.statusText);
-            return res.json();
-        } catch(e) {
-            console.error("API Error", e);
-            return null;
-        }
+            const r = await fetch(ep, opts);
+            if(!r.ok) throw new Error(r.statusText);
+            return r.json();
+        } catch(e) { console.error(e); return null; }
     };
 
-    // --- Tab Logic ---
-    function setTab(t){
+    function showToast(msg) {
+        const t = el('rec-toast');
+        t.innerText = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // Tabs
+    function setTab(id) {
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        el('tab-'+t).classList.add('active');
-        // Find button that called this
-        const btns = document.querySelectorAll('.tab-btn');
-        // Simple hack based on index lol
-        if(t==='dashboard') btns[0].classList.add('active');
-        if(t==='camera') btns[1].classList.add('active');
-        if(t==='wifi') { btns[2].classList.add('active'); updateWifiStatus(); }
-        if(t==='system') btns[3].classList.add('active');
+        el('tab-'+id).classList.add('active');
+        event.target.classList.add('active');
+        if(id === 'net') updateWifi();
     }
 
-    // --- Stream ---
-    let streamActive = true;
-    function toggleStream(){
-        streamActive = !streamActive;
-        el('stream').src = streamActive ? '/stream' : '';
+    // Camera
+    function toggleStream() { 
+        const img = el('stream');
+        if (img.src.includes('/stream')) {
+            img.src = ""; // Stop stream
+            img.alt = "Paused";
+            el('status-text').innerText = "Paused";
+        } else {
+            img.src = "/stream?t=" + Date.now(); // Start with cache bust
+            img.alt = "Connecting...";
+            el('status-text').innerText = "Connecting...";
+        }
     }
-    function snap(){ window.open('/snapshot', '_blank'); }
-    
-    // --- Config ---
-    function cfg(key, val){
-        fetch('/api/config', {
-            method: 'POST',
-            body: JSON.stringify({[key]: val})
-        });
-    }
-    function setAutoFlash(en){
-         fetch('/api/autoflash', { method: 'POST', body: JSON.stringify({enabled: en}) });
-         updateStatus();
-    }
-    function downloadSnapshot(){
-        const link = document.createElement('a');
-        link.href = '/snapshot';
-        link.download = `snapshot_${new Date().getTime()}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    function snap() { 
+        const a = document.createElement('a'); a.href = '/snapshot'; a.download = `snap_${Date.now()}.jpg`; a.click(); 
     }
     
-    // Optimistic Flash Toggle
-    let flashState = false;
-    function toggleFlash(){
-        flashState = !flashState;
-        // Visual Feedback immediate
-        const btn = el('btn-flash');
-        btn.style.background = flashState ? "var(--accent)" : "var(--primary)";
-        btn.innerText = flashState ? "⚡ Flash ON" : "⚡ Flash OFF";
+    // Recording
+    let isRecording = false;
+    let mediaRecorder;
+    let recordedChunks = [];
+    let recCanvas, recCtx, recLoop;
+    
+    // Toggle Record
+    async function toggleRecord() {
+        const mode = el('rec-mode').value;
+        const btn = el('btn-record');
         
-        // Send request
-        fetch('/api/flash', { method: 'POST', body: JSON.stringify({state: flashState}) })
-            .catch(() => {
-                // Revert if failed
-                flashState = !flashState;
-                 btn.style.background = "var(--danger)";
-                 btn.innerText = "Error";
-            });
+        if (!isRecording) {
+            // Start
+            if (mode === 'device') {
+                startClientRecord();
+                showToast("Video saving to Device ⬇️");
+            } else {
+                // SD Card
+                await api('/api/record', {method:'POST', body:JSON.stringify({action:'start'})});
+                showToast("Recording to SD Card 💾");
+            }
+            isRecording = true;
+            btn.innerHTML = '⬛'; // Stop icon
+            btn.classList.add('pulse');
+        } else {
+            // Stop
+            if (mode === 'device') {
+                stopClientRecord();
+            } else {
+                await api('/api/record', {method:'POST', body:JSON.stringify({action:'stop'})});
+                showToast("Recording Stopped");
+            }
+            isRecording = false;
+            btn.innerHTML = '🔴';
+            btn.classList.remove('pulse');
+        }
+    }
+    
+    function startClientRecord() {
+        const img = el('stream');
+        
+        // Dynamic Canvas Sizing
+        // Wait for image to load if needed (though usually it is streaming)
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        
+        if (w === 0 || h === 0) {
+            console.warn("Stream not fully loaded, using default 640x480");
+            w = 640;
+            h = 480;
+        }
+
+        recCanvas = document.createElement('canvas');
+        recCanvas.width = w;
+        recCanvas.height = h;
+        recCtx = recCanvas.getContext('2d');
+        
+        console.log(`Starting Local Rec: ${w}x${h}`);
+        
+        const draw = () => {
+            if(!isRecording) return;
+            // Robust drawing: check if complete
+            if (img.complete && img.naturalWidth > 0) {
+                 // Force scale to canvas size to prevent cropping if stream changes
+                 recCtx.drawImage(img, 0, 0, w, h);
+            }
+            requestAnimationFrame(draw);
+        };
+        draw();
+        
+        const stream = recCanvas.captureStream(20); // 20 FPS
+        
+        // Prioritize MP4 -> WebM -> VP9
+        let mime = 'video/webm';
+        let ext = 'webm';
+        
+        if (MediaRecorder.isTypeSupported('video/mp4')) {
+            mime = 'video/mp4';
+            ext = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+            mime = 'video/webm;codecs=vp9';
+        }
+        
+        console.log("Recording using:", mime);
+        
+        try {
+            mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+        } catch (e) {
+            console.error("MediaRecorder fail, trying default:", e);
+            mediaRecorder = new MediaRecorder(stream);
+            ext = 'webm'; 
+        }
+
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = e => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: mime });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `rec_${Date.now()}.${ext}`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Saved as .${ext.toUpperCase()}`);
+        };
+        
+        mediaRecorder.start();
+    }
+    
+    function stopClientRecord() {
+        if(mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+    }
+    
+    // Flash
+    let flash = false;
+    function toggleFlash() {
+        flash = !flash;
+        el('btn-flash').style.color = flash ? '#fbbf24' : 'white';
+        api('/api/flash', {method:'POST', body:JSON.stringify({state:flash})});
     }
 
-    // --- WiFi ---
-    async function updateWifiStatus(){
+    // Fullscreen
+    function toggleFS() {
+        const c = el('vcont');
+        if(!document.fullscreenElement) {
+            c.requestFullscreen().catch(e=>console.log(e));
+            c.classList.add('fullscreen');
+        } else {
+            document.exitFullscreen();
+            c.classList.remove('fullscreen');
+        }
+    }
+    document.addEventListener('fullscreenchange', () => {
+        if(!document.fullscreenElement) el('vcont').classList.remove('fullscreen');
+    });
+
+    // Config
+    function cfg(k,v) { api('/api/config', {method:'POST', body:JSON.stringify({[k]:v})}); }
+    
+    // ... WiFi, OTA etc ... (Assuming rest is same)
+    // Actually I must include rest of file to be safe with replace_file_content if I'm replacing a huge chunk
+    
+    // WiFi
+    async function updateWifi() {
         const d = await api('/api/wifi/status');
-        if(d){
-            el('wifi-current').innerText = d.ssid || "Not Connected";
+        if(d) {
+            el('wifi-ssid').innerText = d.ssid;
             el('wifi-ip').innerText = d.ip;
         }
     }
-    
-    async function scanWifi(){
-        el('btn-scan').disabled = true;
+    async function scanWifi() {
         el('btn-scan').innerText = "Scanning...";
-        el('wifi-results').innerHTML = '<div class="text-mut text-center">Searching...</div>';
-        
         const d = await api('/api/wifi/scan');
-        el('btn-scan').disabled = false;
-        el('btn-scan').innerText = "🔁 Scan Networks";
-        
-        if(d && d.networks){
-            let html = '';
-            d.networks.forEach(n => {
-                html += `
+        el('btn-scan').innerText = "Scan Networks";
+        if(d && d.networks) {
+            el('wifi-list').innerHTML = d.networks.map(n => `
                 <div class="wifi-item">
-                    <div>
-                        <div style="font-weight:600">${n.ssid}</div>
-                        <div class="text-sm text-mut">Signal: ${n.rssi} dBm</div>
-                    </div>
-                    <button class="btn sm outline" onclick="connectWifi('${n.ssid}')">Connect</button>
-                </div>`;
-            });
-            el('wifi-results').innerHTML = html;
-        } else {
-             el('wifi-results').innerHTML = '<div class="text-mut">No networks found</div>';
+                    <div><b>${n.ssid}</b> <span class="wifi-sig">${n.rssi}dBm</span></div>
+                    <button class="btn" style="padding:4px 10px; font-size:0.8rem" onclick="connect('${n.ssid}')">Connect</button>
+                </div>
+            `).join('');
         }
     }
-    
-    async function connectWifi(ssid){
-        const pass = prompt(`Enter password for ${ssid}:`);
-        if(pass === null) return;
-        
-        alert(`Connecting to ${ssid}... This may take 10-20 seconds. The device will reboot if successful.`);
-        await api('/api/wifi/connect', { method: 'POST', body: JSON.stringify({ssid, password: pass}) });
+    function connect(ssid) {
+        const p = prompt('Password for ' + ssid);
+        if(p) api('/api/wifi/connect', {method:'POST', body:JSON.stringify({ssid, password:p})});
     }
 
-    // --- System / OTA ---
-    function reboot(){
-        if(confirm("Reboot device?")) api('/api/reboot', {method: 'POST'});
-    }
-    
-    function syncTime(){
-        // Send current Browser Time (Epoch)
-        const epoch = Math.floor(Date.now() / 1000);
-        api('/api/time', {method: 'POST', body: JSON.stringify({epoch})})
-            .then(() => alert("Time Synced with Browser!"));
-    }
-    
-    function startOTA(){
-        const fileInput = el('ota-file');
-        if(!fileInput.files.length) return alert("Select a file first!");
-        
-        const file = fileInput.files[0];
-        const fd = new FormData();
-        fd.append("update", file);
-        
+    // OTA
+    function startOTA() {
+        const f = el('ota-file').files[0];
+        if(!f) return alert('Select file');
+        const fd = new FormData(); fd.append("update", f);
         const xhr = new XMLHttpRequest();
-        xhr.upload.addEventListener("progress", (e) => {
-            if(e.lengthComputable){
-                const pct = Math.round((e.loaded / e.total) * 100);
-                el('ota-progress').style.width = pct + '%';
-            }
-        });
-        
-        xhr.open("POST", "/api/update");
-        xhr.onload = () => {
-             if(xhr.status === 200){
-                 alert("Update Success! Device rebooting...");
-                 setTimeout(() => location.reload(), 5000);
-             } else {
-                 alert("Update Failed!");
-                 el('ota-progress').style.background = "var(--danger)";
-             }
-        };
-        xhr.onerror = () => alert("Update Error");
-        xhr.send(fd);
+        xhr.upload.onprogress = e => el('ota-bar').style.width = Math.round((e.loaded/e.total)*100)+'%';
+        xhr.onload = () => alert(xhr.status === 200 ? 'Success! Rebooting...' : 'Failed');
+        xhr.open("POST", "/api/update"); xhr.send(fd);
     }
 
-    // --- Global Status Loop ---
-    let interval;
-    async function updateStatus(){
+    // Loop
+    // Status Function
+    async function updateStatus() {
         const d = await api('/api/status');
-        if(d){
-            // Online
-            const dot = document.querySelector('.status-dot');
-            dot.classList.add('online');
-            el('statusText').innerText = "Online";
-            
-            // Dashboard
-            el('d-status').innerText = d.status;
-            el('d-uptime').innerText = formatTime(d.uptime || 0);
-            el('d-heap').innerText = Math.round((d.heap || 0) / 1024) + " KB";
-            el('d-motion').innerText = d.motion ? "Detected" : "None";
-            if(d.motion) el('d-motion').style.color = "var(--danger)";
-            else el('d-motion').style.color = "var(--success)";
-            el('d-autoflash').innerText = d.autoflash ? "On" : "Off";
-            
+        if(d) {
+            el('status-pill').classList.remove('offline');
+            el('status-text').innerText = "Online";
+            el('val-uptime').innerText = Math.floor(d.uptime/60) + "m";
+            el('val-heap').innerText = Math.round(d.heap/1024) + "KB";
+            el('url-rtsp').value = d.rtsp;
+            el('url-onvif').value = d.onvif;
             if(el('chk-autoflash')) el('chk-autoflash').checked = d.autoflash;
+            if(el('chk-onvif')) el('chk-onvif').checked = d.onvif_enabled;
             
-            el('rtsp-url').value = d.rtsp;
-            el('onvif-url').value = d.onvif;
+            // Handle SD Mount Status
+            const sdOpt = el('rec-mode').querySelector('option[value="sd"]');
+            if (sdOpt) {
+                if (!d.sd_mounted) {
+                    sdOpt.disabled = true;
+                    sdOpt.innerText = "SD Card (Not Found)";
+                    if(el('rec-mode').value === 'sd') el('rec-mode').value = 'device';
+                } else {
+                    sdOpt.disabled = false;
+                    sdOpt.innerText = "SD Card (Server)";
+                }
+            }
+            
+            // Sync recording status if SD mode is active
+            if(el('rec-mode').value === 'sd') {
+                el('sd-rec-status-row').style.display = 'flex';
+                el('sd-status').innerText = d.recording ? "Recording..." : "Ready";
+                if(d.recording && !isRecording) {
+                    isRecording = true;
+                     el('btn-record').innerHTML = '⬛';
+                     el('btn-record').classList.add('pulse');
+                } else if (!d.recording && isRecording && el('rec-mode').value === 'sd') {
+                     isRecording = false;
+                     el('btn-record').innerHTML = '🔴';
+                     el('btn-record').classList.remove('pulse');
+                }
+            } else {
+                el('sd-rec-status-row').style.display = 'none';
+            }
         } else {
-            document.querySelector('.status-dot').classList.remove('online');
-            el('statusText').innerText = "Offline";
+             el('status-pill').classList.add('offline');
+             el('status-text').innerText = "Offline";
         }
     }
 
-    function formatTime(s){
-        const h = Math.floor(s/3600);
-        const m = Math.floor((s%3600)/60);
-        return `${h}h ${m}m`;
-    }
+    // Loop
+    setInterval(updateStatus, 2000); 
 
-    // Init
-    window.onload = () => {
-        el('stream').src = '/stream';
-        updateStatus();
-        interval = setInterval(updateStatus, 3000);
+    // Stream Watchdog
+    const streamImg = el('stream');
+    streamImg.onerror = () => {
+        console.log("Stream error/disconnect. Retrying...");
+        el('status-text').innerText = "Reconnecting...";
+        el('status-pill').classList.add('offline');
+        setTimeout(() => {
+            if (streamImg.src.includes('/stream')) {
+                 streamImg.src = '/stream?t=' + Date.now();
+            }
+        }, 2000); 
+    };
+    
+    streamImg.onload = () => {
+         el('status-pill').classList.remove('offline');
+         el('status-text').innerText = "Online";
     };
 
+    window.onload = () => { 
+        el('stream').src = '/stream?t=' + Date.now(); 
+        updateStatus(); // Immediate check
+        updateWifi();
+    }
 </script>
 </body>
 </html>

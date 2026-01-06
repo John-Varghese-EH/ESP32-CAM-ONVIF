@@ -23,6 +23,9 @@
 #include "serial_console.h"
 #include "auto_flash.h"
 #include "status_led.h"
+#include <esp_task_wdt.h>
+
+#define WDT_TIMEOUT 30 // 30 seconds hardware watchdog
 
 void setup() {
   // Production speed: 115200. Debug output minimized via platformio.ini
@@ -30,6 +33,16 @@ void setup() {
   Serial.setDebugOutput(false); 
   
   Serial.println("\n\n--- ESP32-CAM STARTING ---");
+  
+  // Initialize Watchdog (ESP32 Arduino v3.0+ / IDF v5.x)
+  esp_task_wdt_config_t wdt_config = {
+      .timeout_ms = WDT_TIMEOUT * 1000,
+      .idle_core_mask = (1 << 0) | (1 << 1), // Subscribe idle task on core 0 and 1
+      .trigger_panic = true
+  };
+  esp_task_wdt_init(&wdt_config);
+  esp_task_wdt_add(NULL); // Add current thread
+  Serial.println("[INFO] WDT Enabled");
   printBanner();
   
   // Initialize camera
@@ -71,6 +84,9 @@ void setup() {
 }
 
 void loop() {
+  // Feed Watchdog
+  esp_task_wdt_reset();
+  
   // Critical Loops (Keep minimal blocking)
   rtsp_server_loop();   // Highest priority for streaming
   wifiManager.loop();   // Connectivity

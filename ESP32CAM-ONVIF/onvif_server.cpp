@@ -11,18 +11,35 @@
 
 WebServer onvifServer(ONVIF_PORT);
 WiFiUDP onvifUDP;
+static bool _onvifEnabled = DEFAULT_ONVIF_ENABLED;
+
+bool onvif_is_enabled() { return _onvifEnabled; }
+void onvif_set_enabled(bool en) { _onvifEnabled = en; }
 
 const char PROGMEM PART_HEADER[] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" ";
 const char PROGMEM PART_BODY[] = "<SOAP-ENV:Body>";
 const char PROGMEM PART_END[] = "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
+
+
 // --- PROGMEM Templates ---
+// GetCapabilities Response - Uses tt: namespace for Capabilities content per ONVIF spec
 const char PROGMEM TPL_CAPABILITIES[] = 
-    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
     "<SOAP-ENV:Body>"
     "<tds:GetCapabilitiesResponse>"
     "<tds:Capabilities>"
-    "<tds:Media><tds:XAddr>http://%s:%d/onvif/device_service</tds:XAddr></tds:Media>"
+    "<tt:Device>"
+        "<tt:XAddr>http://%s:%d/onvif/device_service</tt:XAddr>"
+        "<tt:Network><tt:IPFilter>false</tt:IPFilter><tt:ZeroConfiguration>false</tt:ZeroConfiguration><tt:IPVersion6>false</tt:IPVersion6><tt:DynDNS>false</tt:DynDNS></tt:Network>"
+        "<tt:System><tt:DiscoveryResolve>false</tt:DiscoveryResolve><tt:DiscoveryBye>false</tt:DiscoveryBye><tt:RemoteDiscovery>false</tt:RemoteDiscovery><tt:SystemBackup>false</tt:SystemBackup><tt:FirmwareUpgrade>false</tt:FirmwareUpgrade><tt:SupportedVersions><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tt:SupportedVersions></tt:System>"
+        "<tt:Security><tt:TLS1.0>false</tt:TLS1.0><tt:TLS1.1>false</tt:TLS1.1><tt:TLS1.2>false</tt:TLS1.2><tt:OnboardKeyGeneration>false</tt:OnboardKeyGeneration><tt:AccessPolicyConfig>false</tt:AccessPolicyConfig><tt:DefaultAccessPolicy>false</tt:DefaultAccessPolicy><tt:Dot1X>false</tt:Dot1X><tt:RemoteUserHandling>false</tt:RemoteUserHandling><tt:X.509Token>false</tt:X.509Token><tt:SAMLToken>false</tt:SAMLToken><tt:KerberosToken>false</tt:KerberosToken><tt:UsernameToken>true</tt:UsernameToken><tt:HttpDigest>false</tt:HttpDigest><tt:RELToken>false</tt:RELToken></tt:Security>"
+    "</tt:Device>"
+    "<tt:Media>"
+        "<tt:XAddr>http://%s:%d/onvif/device_service</tt:XAddr>"
+        "<tt:StreamingCapabilities><tt:RTPMulticast>false</tt:RTPMulticast><tt:RTP_TCP>true</tt:RTP_TCP><tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP></tt:StreamingCapabilities>"
+    "</tt:Media>"
+    "<tt:Imaging><tt:XAddr>http://%s:%d/onvif/device_service</tt:XAddr></tt:Imaging>"
     "</tds:Capabilities>"
     "</tds:GetCapabilitiesResponse>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
@@ -76,6 +93,39 @@ const char PROGMEM TPL_SET_TIME_RES[] =
     "<tds:SetSystemDateAndTimeResponse/>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
+// --- Network Services (Hikvision Requirement) ---
+const char PROGMEM TPL_NTP[] = 
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<tds:GetNTPResponse>"
+        "<tds:NTPInformation>"
+            "<tt:FromDHCP>false</tt:FromDHCP>"
+            "<tt:NTPManual><tt:Type>DNS</tt:Type><tt:DNSname>pool.ntp.org</tt:DNSname></tt:NTPManual>"
+        "</tds:NTPInformation>"
+    "</tds:GetNTPResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_DNS[] = 
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<tds:GetDNSResponse>"
+        "<tds:DNSInformation>"
+            "<tt:FromDHCP>false</tt:FromDHCP>"
+            "<tt:DNSManual><tt:Type>IPv4</tt:Type><tt:IPv4Address>8.8.8.8</tt:IPv4Address></tt:DNSManual>"
+        "</tds:DNSInformation>"
+    "</tds:GetDNSResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_NET_PROTOCOLS[] = 
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<tds:GetNetworkProtocolsResponse>"
+        "<tds:NetworkProtocols><tt:Name>HTTP</tt:Name><tt:Enabled>true</tt:Enabled><tt:Port>80</tt:Port></tds:NetworkProtocols>"
+        "<tds:NetworkProtocols><tt:Name>RTSP</tt:Name><tt:Enabled>true</tt:Enabled><tt:Port>554</tt:Port></tds:NetworkProtocols>"
+        "<tds:NetworkProtocols><tt:Name>ONVIF</tt:Name><tt:Enabled>true</tt:Enabled><tt:Port>8000</tt:Port></tds:NetworkProtocols>"
+    "</tds:GetNetworkProtocolsResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
 // Helper to base64 decode
 int base64_decode(String input, uint8_t *output) {
     size_t olen;
@@ -95,65 +145,129 @@ String base64_encode(uint8_t *data, size_t length) {
 bool verify_soap_header(String &soapReq) {
     // 1. Check if Security Header exists
     int secIdx = soapReq.indexOf("Security");
-    if (secIdx < 0) return false; // No security header
+    if (secIdx < 0) {
+        LOG_D("Auth: No Security header in request");
+        return false;
+    }
 
     // 2. Extract Username
     int userStart = soapReq.indexOf("<wsse:Username>", secIdx);
-    if (userStart < 0) return false;
+    if (userStart < 0) {
+        LOG_E("Auth: No Username element found");
+        return false;
+    }
     userStart += 15;
     int userEnd = soapReq.indexOf("</wsse:Username>", userStart);
+    if (userEnd < 0) {
+        LOG_E("Auth: Malformed Username element");
+        return false;
+    }
     String username = soapReq.substring(userStart, userEnd);
+    username.trim();
     
     if (username != WEB_USER) {
-        Serial.println("[AUTH] User mismatch: " + username);
+        LOG_E("Auth: User mismatch. Expected: '" + String(WEB_USER) + "', Got: '" + username + "'");
         return false;
     }
 
     // 3. Extract Password (Digest)
-    int passStart = soapReq.indexOf("<wsse:Password", secIdx); // Handle attributes potentially
+    int passStart = soapReq.indexOf("<wsse:Password", secIdx); 
+    if (passStart < 0) {
+        LOG_E("Auth: No Password element found");
+        return false;
+    }
     passStart = soapReq.indexOf(">", passStart) + 1;
     int passEnd = soapReq.indexOf("</wsse:Password>", passStart);
+    if (passEnd < 0) {
+        LOG_E("Auth: Malformed Password element");
+        return false;
+    }
     String digestBase64 = soapReq.substring(passStart, passEnd);
+    digestBase64.trim();
 
     // 4. Extract Nonce
     int nonceStart = soapReq.indexOf("<wsse:Nonce", secIdx);
+    if (nonceStart < 0) {
+        LOG_E("Auth: No Nonce element found");
+        return false;
+    }
     nonceStart = soapReq.indexOf(">", nonceStart) + 1;
     int nonceEnd = soapReq.indexOf("</wsse:Nonce>", nonceStart);
+    if (nonceEnd < 0) {
+        LOG_E("Auth: Malformed Nonce element");
+        return false;
+    }
     String nonceBase64 = soapReq.substring(nonceStart, nonceEnd);
+    nonceBase64.trim();
 
-    // 5. Extract Created
+    // 5. Extract Created timestamp
     int createdStart = soapReq.indexOf("<wsu:Created>", secIdx);
+    if (createdStart < 0) {
+        LOG_E("Auth: No Created timestamp found");
+        return false;
+    }
     createdStart += 13;
     int createdEnd = soapReq.indexOf("</wsu:Created>", createdStart);
+    if (createdEnd < 0) {
+        LOG_E("Auth: Malformed Created element");
+        return false;
+    }
     String created = soapReq.substring(createdStart, createdEnd);
+    created.trim();
+    
+    // Debug output for troubleshooting (only in verbose mode)
+    if (DEBUG_LEVEL >= 3) {
+        Serial.println("[DEBUG] Auth components:");
+        Serial.println("  User: '" + username + "'");
+        Serial.println("  Nonce: '" + nonceBase64 + "'");
+        Serial.println("  Created: '" + created + "'");
+        Serial.println("  Password (config): '" + String(WEB_PASS) + "'");
+        Serial.println("  Digest (received): '" + digestBase64 + "'");
+    }
     
     // 6. Verify Digest = Base64(SHA1(Base64Decode(Nonce) + Created + Password))
     uint8_t nonce[64];
+    memset(nonce, 0, sizeof(nonce));
     int nonceLen = base64_decode(nonceBase64, nonce);
     
-    // Concatenate buffer
-    uint8_t buffer[128]; 
-    memcpy(buffer, nonce, nonceLen);
-    memcpy(buffer + nonceLen, created.c_str(), created.length());
-    memcpy(buffer + nonceLen + created.length(), WEB_PASS, strlen(WEB_PASS));
+    if (nonceLen <= 0) {
+        LOG_E("Auth: Failed to decode nonce");
+        return false;
+    }
     
-    size_t totalLen = nonceLen + created.length() + strlen(WEB_PASS);
+    // Concatenate: nonce + created + password
+    uint8_t buffer[256];  // Increased buffer size
+    size_t offset = 0;
+    memcpy(buffer + offset, nonce, nonceLen);
+    offset += nonceLen;
+    memcpy(buffer + offset, created.c_str(), created.length());
+    offset += created.length();
+    memcpy(buffer + offset, WEB_PASS, strlen(WEB_PASS));
+    offset += strlen(WEB_PASS);
+    
+    size_t totalLen = offset;
     
     uint8_t sha1Result[20];
     mbedtls_sha1(buffer, totalLen, sha1Result);
     
     String calculatedDigest = base64_encode(sha1Result, 20);
     
-    // Trim potential whitespace or padding issues (simple exact match first)
-    // Serial.println("Calc: " + calculatedDigest);
-    // Serial.println("Recv: " + digestBase64);
+    if (DEBUG_LEVEL >= 3) {
+        Serial.println("  Digest (calculated): '" + calculatedDigest + "'");
+    }
     
-    if (calculatedDigest.indexOf(digestBase64) >= 0 || digestBase64.indexOf(calculatedDigest) >= 0) {
+    // Verify digest match
+    if (calculatedDigest.equals(digestBase64)) {
+         LOG_D("Auth: Digest verification successful");
          return true;
     }
     
-    Serial.println("[AUTH] Digest verification failed");
-    return false;
+    LOG_E("Auth: Digest verification failed");
+    if (DEBUG_LEVEL >= 2) {
+        Serial.println("  Expected: " + calculatedDigest);
+        Serial.println("  Got: " + digestBase64);
+    }
+    return false; 
 }
 
 // Handle SetSystemDateAndTime
@@ -223,10 +337,7 @@ void handle_SetSystemDateAndTime(String &req) {
             time(&now_check);
             localtime_r(&now_check, &timeinfo);
             
-            Serial.printf("[INFO] ONVIF Time Sync: UTC %04d-%02d-%02d %02d:%02d:%02d -> Local %04d-%02d-%02d %02d:%02d:%02d\n", 
-                year, month, day, hour, min, sec,
-                timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+            LOG_I("Time Sync: UTC " + String(year) + "-" + String(month) + "-" + String(day) + " " + String(hour) + ":" + String(min) + " -> Local " + String(timeinfo.tm_hour) + ":" + String(timeinfo.tm_min));
         }
     }
 }
@@ -250,33 +361,24 @@ void send_soap_fault(WebServer &server, const char* code, const char* subcode, c
 }
 
 // Optimized heap-less send for dynamic content
-// Optimized heap-based send for dynamic content (avoids stack overflow)
+// Optimized send for dynamic content (Static Buffer = No Heap Frag)
 void sendDynamicPROGMEM(WebServer &server, const char* tpl, const char* ip, int port) {
-    char *buffer = new char[2048]; // Heap allocation
-    if (!buffer) {
-        Serial.println("[ERROR] OOM in sendDynamicPROGMEM");
-        server.send(500, "text/plain", "OOM");
-        return;
-    }
-    snprintf_P(buffer, 2048, PART_HEADER); 
+    static char buffer[2048]; // Static allocation (Global memory, created on startup)
+    // No OOM check needed for static
+    
+    snprintf_P(buffer, sizeof(buffer), PART_HEADER); 
     size_t len = strlen(buffer);
-    snprintf_P(buffer + len, 2048 - len, tpl, ip, port);
+    snprintf_P(buffer + len, sizeof(buffer) - len, tpl, ip, port);
     server.send(200, "application/soap+xml", buffer);
-    delete[] buffer;
 }
 
 // Overload for just sending fixed PROGMEM with header
 void sendFixedPROGMEM(WebServer &server, const char* tpl) {
-    char *buffer = new char[2048]; // Heap allocation
-    if (!buffer) {
-         Serial.println("[ERROR] OOM in sendFixedPROGMEM");
-         server.send(500, "text/plain", "OOM");
-         return;
-    }
-    snprintf_P(buffer, 2048, PART_HEADER);
-    strncat_P(buffer, tpl, 2048 - strlen(buffer) - 1);
+    static char buffer[2048]; // reuse static buffer (safe single-threaded)
+    
+    snprintf_P(buffer, sizeof(buffer), PART_HEADER);
+    strncat_P(buffer, tpl, sizeof(buffer) - strlen(buffer) - 1);
     server.send(200, "application/soap+xml", buffer);
-    delete[] buffer;
 }
 
 // --- New Handlers ---
@@ -289,7 +391,7 @@ const char PROGMEM TPL_VIDEO_SOURCES[] =
     "<SOAP-ENV:Body>"
     "<trt:GetVideoSourcesResponse>"
         "<trt:VideoSources token=\"VideoSource_1\">"
-            "<tt:Framerate>25.0</tt:Framerate>"
+            "<tt:Framerate>20.0</tt:Framerate>"
             "<tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution>"
             "<tt:Imaging>"
                 "<tt:BacklightCompensation><tt:Mode>OFF</tt:Mode></tt:BacklightCompensation>"
@@ -310,30 +412,51 @@ const char PROGMEM TPL_VIDEO_OPTIONS[] =
         "<trt:Options>"
             "<tt:QualityRange><tt:Min>0</tt:Min><tt:Max>63</tt:Max></tt:QualityRange>"
             "<tt:JPEG><tt:ResolutionsAvailable><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:ResolutionsAvailable>"
-            "<tt:FrameRateRange><tt:Min>1</tt:Min><tt:Max>30</tt:Max></tt:FrameRateRange>"
+            "<tt:FrameRateRange><tt:Min>1</tt:Min><tt:Max>20</tt:Max></tt:FrameRateRange>"
             "<tt:EncodingIntervalRange><tt:Min>1</tt:Min><tt:Max>1</tt:Max></tt:EncodingIntervalRange>"
             "</tt:JPEG>"
         "</trt:Options>"
     "</trt:GetVideoEncoderConfigurationOptionsResponse>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
-// Specific Configuration Details (Match VGA settings)
-const char PROGMEM TPL_VIDEO_ENCODER_CONFIG[] = 
+const char PROGMEM TPL_VIDEO_ENCODER_CONFIG_MAIN[] = 
     "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
     "<SOAP-ENV:Body>"
     "<trt:GetVideoEncoderConfigurationResponse>"
-        "<trt:Configuration token=\"VideoEncoderToken\">"
-        "<tt:Name>VideoEncoderConfig</tt:Name>"
+        "<trt:Configuration token=\"VideoEncoderToken_Main\">"
+        "<tt:Name>VideoEncoderConfig_Main</tt:Name>"
         "<tt:UseCount>1</tt:UseCount>"
         "<tt:Encoding>JPEG</tt:Encoding>"
         "<tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution>"
-        "<tt:Quality>50</tt:Quality>"
+        "<tt:Quality>10</tt:Quality>"
         "<tt:RateControl><tt:FrameRateLimit>20</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval><tt:BitrateLimit>4096</tt:BitrateLimit></tt:RateControl>"
+        "<tt:JPEG><tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution></tt:JPEG>"
         "<tt:Multicast><tt:Address><tt:Type>IPv4</tt:Type><tt:IPv4Address>0.0.0.0</tt:IPv4Address></tt:Address><tt:Port>0</tt:Port><tt:TTL>1</tt:TTL><tt:AutoStart>false</tt:AutoStart></tt:Multicast>"
         "<tt:SessionTimeout>PT60S</tt:SessionTimeout>"
         "</trt:Configuration>"
     "</trt:GetVideoEncoderConfigurationResponse>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_VIDEO_ENCODER_CONFIG_SUB[] = 
+    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<trt:GetVideoEncoderConfigurationResponse>"
+        "<trt:Configuration token=\"VideoEncoderToken_Sub\">"
+        "<tt:Name>VideoEncoderConfig_Sub</tt:Name>"
+        "<tt:UseCount>1</tt:UseCount>"
+        "<tt:Encoding>JPEG</tt:Encoding>"
+        "<tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution>"
+        "<tt:Quality>10</tt:Quality>"
+        "<tt:RateControl><tt:FrameRateLimit>20</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval><tt:BitrateLimit>4096</tt:BitrateLimit></tt:RateControl>"
+        "<tt:JPEG><tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution></tt:JPEG>"
+        "<tt:Multicast><tt:Address><tt:Type>IPv4</tt:Type><tt:IPv4Address>0.0.0.0</tt:IPv4Address></tt:Address><tt:Port>0</tt:Port><tt:TTL>1</tt:TTL><tt:AutoStart>false</tt:AutoStart></tt:Multicast>"
+        "<tt:SessionTimeout>PT60S</tt:SessionTimeout>"
+        "</trt:Configuration>"
+    "</trt:GetVideoEncoderConfigurationResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+
+
 
 const char PROGMEM TPL_HOSTNAME[] = 
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
@@ -347,6 +470,23 @@ const char PROGMEM TPL_HOSTNAME[] =
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
 // Audio Stubs (Empty to prevent errors)
+// Imaging Options (Brightness/Contrast/Saturation)
+const char PROGMEM TPL_IMAGING_OPTIONS[] = 
+    "xmlns:timg=\"http://www.onvif.org/ver20/imaging/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<timg:GetOptionsResponse>"
+        "<timg:ImagingOptions>"
+            "<tt:BacklightCompensation><tt:Mode>OFF</tt:Mode><tt:Mode>ON</tt:Mode></tt:BacklightCompensation>"
+            "<tt:Brightness><tt:Min>0.0</tt:Min><tt:Max>100.0</tt:Max></tt:Brightness>"
+            "<tt:ColorSaturation><tt:Min>0.0</tt:Min><tt:Max>100.0</tt:Max></tt:ColorSaturation>"
+            "<tt:Contrast><tt:Min>0.0</tt:Min><tt:Max>100.0</tt:Max></tt:Contrast>"
+            "<tt:Exposure><tt:Mode>AUTO</tt:Mode><tt:MinExposureTime>0.0</tt:MinExposureTime><tt:MaxExposureTime>0.0</tt:MaxExposureTime><tt:MinGain>0.0</tt:MinGain><tt:MaxGain>0.0</tt:MaxGain><tt:MinIris>0.0</tt:MinIris><tt:MaxIris>0.0</tt:MaxIris></tt:Exposure>"
+            "<tt:Focus><tt:AutoFocusModes>AUTO</tt:AutoFocusModes><tt:DefaultSpeed><tt:PanTilt x=\"1\" y=\"1\" space=\"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace\"/><tt:Zoom x=\"1\" space=\"http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace\"/></tt:DefaultSpeed><tt:NearLimit>0.0</tt:NearLimit><tt:FarLimit>0.0</tt:FarLimit></tt:Focus>"
+            "<tt:IrCutFilterModes>ON</tt:IrCutFilterModes><tt:IrCutFilterModes>OFF</tt:IrCutFilterModes><tt:IrCutFilterModes>AUTO</tt:IrCutFilterModes>"
+        "</timg:ImagingOptions>"
+    "</timg:GetOptionsResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
 const char PROGMEM TPL_AUDIO_OPTIONS[] = 
     "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
     "<SOAP-ENV:Body>"
@@ -361,6 +501,50 @@ const char PROGMEM TPL_AUDIO_CONFIG[] =
     "<SOAP-ENV:Body>"
     "<trt:GetAudioEncoderConfigurationResponse>"
     "</trt:GetAudioEncoderConfigurationResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_MOVE_OPTIONS[] = 
+    "xmlns:tptz=\"http://www.onvif.org/ver20/ptz/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<tptz:GetMoveOptionsResponse>"
+        "<tptz:MoveOptions>"
+            "<tt:Absolute>"
+                "<tt:XRange><tt:Min>-1.0</tt:Min><tt:Max>1.0</tt:Max></tt:XRange>"
+                "<tt:YRange><tt:Min>-1.0</tt:Min><tt:Max>1.0</tt:Max></tt:YRange>"
+            "</tt:Absolute>"
+            "<tt:Continuous>"
+                "<tt:XRange><tt:Min>-1.0</tt:Min><tt:Max>1.0</tt:Max></tt:XRange>"
+                "<tt:YRange><tt:Min>-1.0</tt:Min><tt:Max>1.0</tt:Max></tt:YRange>"
+            "</tt:Continuous>"
+        "</tptz:MoveOptions>"
+    "</tptz:GetMoveOptionsResponse>"
+    "</tptz:GetMoveOptionsResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_IMAGING_MOVE_OPTIONS[] = 
+    "xmlns:timg=\"http://www.onvif.org/ver20/imaging/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<timg:GetMoveOptionsResponse>"
+        "<timg:MoveOptions>"
+            "<tt:Absolute>"
+                "<tt:Focus>"
+                     "<tt:Position><tt:Min>0.0</tt:Min><tt:Max>1.0</tt:Max></tt:Position>"
+                     "<tt:Speed><tt:Min>0.0</tt:Min><tt:Max>1.0</tt:Max></tt:Speed>"
+                "</tt:Focus>"
+            "</tt:Absolute>"
+            "<tt:Continuous>"
+                 "<tt:Focus>"
+                     "<tt:Speed><tt:Min>0.0</tt:Min><tt:Max>1.0</tt:Max></tt:Speed>"
+                "</tt:Focus>"
+            "</tt:Continuous>"
+        "</timg:MoveOptions>"
+    "</timg:GetMoveOptionsResponse>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
+const char PROGMEM TPL_SET_SYNC_POINT[] = 
+    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<SOAP-ENV:Body>"
+    "<trt:SetSynchronizationPointResponse/>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
 // OSD Stubs (Empty to prevent errors)
@@ -392,12 +576,83 @@ const char PROGMEM TPL_NETWORK_INTERFACES[] =
                 "<tt:HwAddress>%s</tt:HwAddress>"
                 "<tt:MTU>1500</tt:MTU>"
             "</tt:Info>"
+            "<tt:IPv4>"
+                "<tt:Enabled>true</tt:Enabled>"
+                "<tt:Config>"
+                    "<tt:Manual>"
+                        "<tt:Address>%s</tt:Address>"
+                        "<tt:PrefixLength>24</tt:PrefixLength>"
+                    "</tt:Manual>"
+                    "<tt:DHCP>false</tt:DHCP>"
+                "</tt:Config>"
+            "</tt:IPv4>"
         "</tds:NetworkInterfaces>"
     "</tds:GetNetworkInterfacesResponse>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
 void handle_GetCapabilities() {
-    sendDynamicPROGMEM(onvifServer, TPL_CAPABILITIES, WiFi.localIP().toString().c_str(), ONVIF_PORT);
+    String ip = WiFi.localIP().toString();
+    
+    LOG_D("Sending GetCapabilities response");
+    
+    // Build complete response first for better reliability
+    char buffer[1500];
+    int len = snprintf(buffer, sizeof(buffer),
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+        "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+        "<SOAP-ENV:Body>"
+        "<tds:GetCapabilitiesResponse>"
+        "<tds:Capabilities>"
+            "<tt:Device>"
+                "<tt:XAddr>http://%s:%d/onvif/device_service</tt:XAddr>"
+                "<tt:Network>"
+                    "<tt:IPFilter>false</tt:IPFilter>"
+                    "<tt:ZeroConfiguration>false</tt:ZeroConfiguration>"
+                    "<tt:IPVersion6>false</tt:IPVersion6>"
+                    "<tt:DynDNS>false</tt:DynDNS>"
+                "</tt:Network>"
+                "<tt:System>"
+                    "<tt:DiscoveryResolve>false</tt:DiscoveryResolve>"
+                    "<tt:DiscoveryBye>false</tt:DiscoveryBye>"
+                    "<tt:RemoteDiscovery>false</tt:RemoteDiscovery>"
+                    "<tt:SystemBackup>false</tt:SystemBackup>"
+                    "<tt:FirmwareUpgrade>false</tt:FirmwareUpgrade>"
+                    "<tt:SupportedVersions>"
+                        "<tt:Major>2</tt:Major>"
+                        "<tt:Minor>0</tt:Minor>"
+                    "</tt:SupportedVersions>"
+                "</tt:System>"
+            "</tt:Device>"
+            "<tt:Media>"
+                "<tt:XAddr>http://%s:%d/onvif/device_service</tt:XAddr>"
+                "<tt:StreamingCapabilities>"
+                    "<tt:RTPMulticast>false</tt:RTPMulticast>"
+                    "<tt:RTP_TCP>true</tt:RTP_TCP>"
+                    "<tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>"
+                "</tt:StreamingCapabilities>"
+            "</tt:Media>"
+            "<tt:Events>"
+                "<tt:XAddr>http://%s:%d/onvif/device_service</tt:XAddr>"
+                "<tt:WSSubscriptionPolicySupport>false</tt:WSSubscriptionPolicySupport>"
+                "<tt:WSPullPointSupport>false</tt:WSPullPointSupport>"
+            "</tt:Events>"
+        "</tds:Capabilities>"
+        "</tds:GetCapabilitiesResponse>"
+        "</SOAP-ENV:Body>"
+        "</SOAP-ENV:Envelope>",
+        ip.c_str(), ONVIF_PORT,
+        ip.c_str(), ONVIF_PORT,
+        ip.c_str(), ONVIF_PORT);
+    
+    if (len > 0 && len < sizeof(buffer)) {
+        onvifServer.send(200, "application/soap+xml", buffer);
+        LOG_D("GetCapabilities sent, size: " + String(len));
+    } else {
+        LOG_E("GetCapabilities buffer overflow!");
+        onvifServer.send(500, "text/plain", "Buffer overflow");
+    }
 }
 
 void handle_GetStreamUri() {
@@ -429,73 +684,7 @@ void handle_GetSystemDateAndTime() {
 
 
 
-String getServicesResponse() {
-  String ip = WiFi.localIP().toString();
-  String xaddr = "http://" + ip + ":" + String(ONVIF_PORT) + "/onvif/device_service";
-  return
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
-    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
-    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
-    "<SOAP-ENV:Body>"
-    "<tds:GetServicesResponse>"
-        "<tds:Service>"
-            "<tds:Namespace>http://www.onvif.org/ver10/device/wsdl</tds:Namespace>"
-            "<tds:XAddr>" + xaddr + "</tds:XAddr>"
-            "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
-        "</tds:Service>"
-        "<tds:Service>"
-            "<tds:Namespace>http://www.onvif.org/ver10/media/wsdl</tds:Namespace>"
-            "<tds:XAddr>" + xaddr + "</tds:XAddr>"
-            "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
-        "</tds:Service>"
-        "<tds:Service>"
-            "<tds:Namespace>http://www.onvif.org/ver20/ptz/wsdl</tds:Namespace>"
-            "<tds:XAddr>" + xaddr + "</tds:XAddr>"
-            "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
-        "</tds:Service>"
-    "</tds:GetServicesResponse>"
-    "</SOAP-ENV:Body>"
-    "</SOAP-ENV:Envelope>";
-}
 
-String getProfilesResponse() {
-  return
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
-    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" "
-    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
-    "<SOAP-ENV:Body>"
-    "<trt:GetProfilesResponse>"
-        "<trt:Profiles token=\"Profile_1\">"
-            "<tt:Name>MainStream</tt:Name>"
-            "<tt:VideoSourceConfiguration token=\"VideoSourceToken\">"
-                "<tt:Name>VideoSourceConfig</tt:Name>"
-                "<tt:UseCount>1</tt:UseCount>"
-                "<tt:SourceToken>VideoSource_1</tt:SourceToken>"
-                "<tt:Bounds x=\"0\" y=\"0\" width=\"1024\" height=\"768\"/>"
-            "</tt:VideoSourceConfiguration>"
-            "<tt:VideoEncoderConfiguration token=\"VideoEncoderToken\">"
-                "<tt:Name>VideoEncoderConfig</tt:Name>"
-                "<tt:UseCount>1</tt:UseCount>"
-                "<tt:Encoding>JPEG</tt:Encoding>"
-                "<tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution>"
-                "<tt:Quality>10</tt:Quality>"
-            "</tt:VideoEncoderConfiguration>"
-            "<tt:PTZConfiguration token=\"PTZToken\">"
-                "<tt:Name>PTZConfig</tt:Name>"
-                "<tt:UseCount>1</tt:UseCount>"
-                "<tt:NodeToken>PTZNodeToken</tt:NodeToken>"
-                "<tt:DefaultContinuousPanTiltVelocitySpace>http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace</tt:DefaultContinuousPanTiltVelocitySpace>"
-                "<tt:DefaultPTZSpeed>"
-                    "<tt:PanTilt x=\"1.0\" y=\"1.0\" space=\"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace\"/>"
-                "</tt:DefaultPTZSpeed>"
-            "</tt:PTZConfiguration>"
-        "</trt:Profiles>"
-    "</trt:GetProfilesResponse>"
-    "</SOAP-ENV:Body>"
-    "</SOAP-ENV:Envelope>";
-}
 
 
 // Simple parser for SetImagingSettings
@@ -509,11 +698,11 @@ void handle_set_imaging_settings(String &req) {
         if (req.indexOf(">OFF<") > 0) {
             // Night mode -> Flash ON
             set_flash_led(true);
-            Serial.println("[INFO] ONVIF: Night Mode (Flash ON)");
+            LOG_I("Night Mode: ON (Flash)");
         } else {
             // Day mode (ON or AUTO) -> Flash OFF
             set_flash_led(false);
-            Serial.println("[INFO] ONVIF: Day Mode (Flash OFF)");
+            LOG_I("Night Mode: OFF (Day)");
         }
     }
 }
@@ -565,35 +754,17 @@ void handle_ptz(String &req) {
 }
 
 // Note: Some NVRs will fail Probe/Discovery if authentication is required for simple gets.
-// Usually basic GetCapabilities/GetServices is open, but others require Auth.
-// Hikvision is STRICT.
+// ONVIF Specification: GetCapabilities, GetServices, GetSystemDateAndTime, GetDeviceInformation
+// should be PUBLIC (no auth required) to allow discovery.
+// Only protected actions like GetStreamUri, GetProfiles need authentication.
 void handle_onvif_soap() {
   String req = onvifServer.arg(0);
   
-  // Auth Check for Sensitivity Actions
-  // Note: GetCapabilities/GetSystemDateAndTime often must be open for initial handshake.
-  bool authRequired = (req.indexOf("GetStreamUri") > 0 || req.indexOf("GetProfiles") > 0 || req.indexOf("SetSystemDateAndTime") > 0);
-  
-  // If request contains Security header, we MUST verify it regardless
-  bool hasSecurity = (req.indexOf("Security") > 0);
-  
-  if (hasSecurity || authRequired) {
-      if (!verify_soap_header(req)) {
-          // Send Fault (Unauthenticated) if validation fails but auth was present or required
-          // However, for simplicity/compatibility, if Auth is just MISSING on a req that 'should' have it but isn't critical (like GetProfiles during scan),
-          // some devices respond openly. But for Hikvision, we want to prove we handle auth.
-          Serial.println("[WARN] SOAP Auth Failed");
-          send_soap_fault(onvifServer, "env:Sender", "ter:NotAuthorized", "Sender not authorized");
-          return;
-      } else {
-           // Serial.println("[INFO] SOAP Auth OK"); // Reduce noise, only log action below
-      }
-  }
-
-  // Debug: Identify Action
+  // Detect action first for proper logging and auth decisions
   String action = "Unknown";
   if (req.indexOf("GetSystemDateAndTime") > 0) action = "GetSystemDateAndTime";
   else if (req.indexOf("SetSystemDateAndTime") > 0) action = "SetSystemDateAndTime";
+  else if (req.indexOf("SetSynchronizationPoint") > 0) action = "SetSynchronizationPoint";
   else if (req.indexOf("GetCapabilities") > 0) action = "GetCapabilities";
   else if (req.indexOf("GetServices") > 0) action = "GetServices";
   else if (req.indexOf("GetDeviceInformation") > 0) action = "GetDeviceInformation";
@@ -603,36 +774,98 @@ void handle_onvif_soap() {
   else if (req.indexOf("GetVideoSources") > 0) action = "GetVideoSources";
   else if (req.indexOf("GetVideoEncoderConfigurationOptions") > 0) action = "GetVideoOptions";
   else if (req.indexOf("GetVideoEncoderConfiguration") > 0) action = "GetVideoConfig";
-  else if (req.indexOf("GetAudioEncoderConfigurationOptions") > 0) action = "GetAudioOptions";
   else if (req.indexOf("GetAudioEncoderConfiguration") > 0) action = "GetAudioConfig";
-  else if (req.indexOf("SetVideoEncoderConfiguration") > 0) action = "SetVideoConfig"; // Stub
-  else if (req.indexOf("GetNetworkInterfaces") > 0) action = "GetNetInterfaces";
+  else if (req.indexOf("SetVideoEncoderConfiguration") > 0) action = "SetVideoConfig";
+  else if (req.indexOf("GetNetworkInterfaces") > 0) action = "GetNetworkInterfaces";
+  else if (req.indexOf("GetNetworkProtocols") > 0) action = "GetNetworkProtocols";
+  else if (req.indexOf("GetScopes") > 0) action = "GetScopes";
+  else if (req.indexOf("GetHostname") > 0) action = "GetHostname";
   else if (req.indexOf("GetDNS") > 0) action = "GetDNS";
   else if (req.indexOf("GetNTP") > 0) action = "GetNTP";
-  else if (req.indexOf("GetHostname") > 0) action = "GetHostname";
-  else if (req.indexOf("GetScopes") > 0) action = "GetScopes";
-  else if (req.indexOf("GetNetworkProtocols") > 0) action = "GetNetProtocols";
-
   else if (req.indexOf("GetOSDOptions") > 0) action = "GetOSDOptions";
+  else if (req.indexOf("GetMoveOptions") > 0) action = "GetMoveOptions";
   else if (req.indexOf("GetVideoAnalyticsConfigurations") > 0) action = "GetAnalyticsConfig";
+  else if (req.indexOf("GetOptions") > 0 && req.indexOf("VideoSourceToken") > 0) action = "GetImagingOptions";
+  else if (req.indexOf("SetImagingSettings") > 0) action = "SetImagingSettings";
+  else if (req.indexOf("AbsoluteMove") > 0 || req.indexOf("ContinuousMove") > 0 || req.indexOf("Stop") > 0) action = "PTZ";
   
-  // Clutter Reduction: Only log "Set" actions or less common "Get" actions
-  if (action.startsWith("Set") || action.indexOf("PTZ") >= 0 || action == "Unknown") {
-      Serial.println("[INFO] ONVIF Action: " + action);
+  // PUBLIC actions (no auth required per ONVIF spec)
+  // These are needed for device discovery and initial handshake
+  // Hikvision calls many of these during initial camera probe
+  bool isPublicAction = (
+      action == "GetCapabilities" ||
+      action == "GetServices" ||
+      action == "GetSystemDateAndTime" ||
+      action == "GetDeviceInformation" ||
+      action == "GetScopes" ||
+      action == "GetHostname" ||
+      action == "GetNetworkInterfaces" ||
+      action == "GetNetworkProtocols" ||
+      action == "GetDNS" ||
+      action == "GetNTP" ||
+      action == "GetVideoOptions" ||   // Needed for codec negotiation
+      action == "GetAudioConfig"       // Usually empty, safe to expose
+  );
+  
+  // PROTECTED actions (require authentication)
+  // These provide access to actual streams or modify settings
+  bool isProtectedAction = (
+      action == "GetStreamUri" || 
+      action == "GetProfiles" || 
+      action == "SetSystemDateAndTime" ||
+      action == "GetVideoSources" ||
+      action == "GetVideoConfig" ||
+      action == "GetSnapshotUri" ||
+      action == "SetVideoConfig" ||
+      action == "SetImagingSettings" ||
+      action == "PTZ"
+  );
+  
+  // Check if request contains Security header
+  bool hasSecurity = (req.indexOf("Security") > 0);
+  
+  // Authentication logic:
+  // 1. If Security header is present, we MUST verify it (even for public actions)
+  // 2. If action is protected but no Security header, require auth
+  // 3. If action is public and no Security header, allow through
+  
+  if (hasSecurity) {
+      // Request has auth header - verify it
+      if (!verify_soap_header(req)) {
+          LOG_E("Auth Failed for: " + action);
+          if (DEBUG_LEVEL >= 3) {
+              // Verbose: show why auth failed
+              int secIdx = req.indexOf("Security");
+              int userIdx = req.indexOf("wsse:Username");
+              int passIdx = req.indexOf("wsse:Password");
+              Serial.printf("[DEBUG] Security header at %d, Username at %d, Password at %d\n", 
+                           secIdx, userIdx, passIdx);
+          }
+          send_soap_fault(onvifServer, "env:Sender", "ter:NotAuthorized", "Authentication failed");
+          return;
+      }
+      LOG_D("Auth OK for: " + action);
+  } else if (isProtectedAction) {
+      // Protected action without auth - reject
+      LOG_E("Auth Required for: " + action + " (no credentials provided)");
+      send_soap_fault(onvifServer, "env:Sender", "ter:NotAuthorized", "Authentication required");
+      return;
   }
-  // Serial.println("[INFO] ONVIF Action: " + action); // Commented out to reduce noise
+  // Public action without auth - allow through
+  
+  LOG_I("ONVIF: " + action);
 
+  // Handle unknown actions with debug output
   if (action == "Unknown") {
       // Find the Body tag to show relevant info without header spam
       int bodyIdx = req.indexOf("<SOAP-ENV:Body>");
       if (bodyIdx == -1) bodyIdx = req.indexOf("Body>");
       
+      Serial.println("[DEBUG] UNKNOWN ACTION BODY:");
       if (bodyIdx > 0) {
-          Serial.println("[DEBUG] Unknown Request Body (Clean):");
-          Serial.println(req.substring(bodyIdx, bodyIdx + 400)); // Show 400 chars of BODY only
+          Serial.println(req.substring(bodyIdx)); 
       } else {
-          // Fallback if no Body tag found easily
-          // Serial.println(req.substring(0, 200)); 
+          Serial.println(req); 
       }
   }
 
@@ -662,40 +895,140 @@ void handle_onvif_soap() {
   } else if (req.indexOf("GetSystemDateAndTime") > 0) {
     handle_GetSystemDateAndTime();
   } else if (req.indexOf("GetServices") > 0) {
-     const char PROGMEM TPL_SERVICES[] = 
+    onvifServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    onvifServer.send(200, "application/soap+xml", "");
+    
+    char buffer[512];
+    String ip = WiFi.localIP().toString();
+
+    // Header + Device Service
+    snprintf_P(buffer, sizeof(buffer), PSTR("%s"
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
     "<SOAP-ENV:Body>"
     "<tds:GetServicesResponse>"
-        // Simplified service list to fit in stack buffer
-        "<tds:Service><tds:Namespace>http://www.onvif.org/ver10/device/wsdl</tds:Namespace><tds:XAddr>http://%s:%d/onvif/device_service</tds:XAddr><tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version></tds:Service>"
+        "<tds:Service><tds:Namespace>http://www.onvif.org/ver10/device/wsdl</tds:Namespace><tds:XAddr>http://%s:%d/onvif/device_service</tds:XAddr><tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version></tds:Service>"), PART_HEADER, ip.c_str(), ONVIF_PORT);
+    onvifServer.sendContent(buffer);
+    
+    // Media Service + Footer
+    snprintf_P(buffer, sizeof(buffer), PSTR(
         "<tds:Service><tds:Namespace>http://www.onvif.org/ver10/media/wsdl</tds:Namespace><tds:XAddr>http://%s:%d/onvif/device_service</tds:XAddr><tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version></tds:Service>"
     "</tds:GetServicesResponse>"
-    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
-    
-    char buffer[1536]; // Needs larger buffer
-    snprintf_P(buffer, sizeof(buffer), PART_HEADER); 
-    size_t len = strlen(buffer);
-    snprintf_P(buffer + len, sizeof(buffer) - len, TPL_SERVICES, WiFi.localIP().toString().c_str(), ONVIF_PORT, WiFi.localIP().toString().c_str(), ONVIF_PORT);
-    onvifServer.send(200, "application/soap+xml", buffer);
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>"), ip.c_str(), ONVIF_PORT);
+    onvifServer.sendContent(buffer);
 
   } else if (req.indexOf("GetProfiles") > 0) {
-     // Massive string, handle carefully
-     const char PROGMEM TPL_PROFILES[] = 
-    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
-    "<SOAP-ENV:Body>"
-    "<trt:GetProfilesResponse>"
-        "<trt:Profiles token=\"Profile_1\">"
-            "<tt:Name>MainStream</tt:Name>"
-            "<tt:VideoSourceConfiguration token=\"VideoSourceToken\">"
-                "<tt:Name>VideoSourceConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:SourceToken>VideoSource_1</tt:SourceToken><tt:Bounds x=\"0\" y=\"0\" width=\"640\" height=\"480\"/></tt:VideoSourceConfiguration>"
-            "<tt:VideoEncoderConfiguration token=\"VideoEncoderToken\">"
-                "<tt:Name>VideoEncoderConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:Encoding>JPEG</tt:Encoding><tt:Resolution><tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution><tt:Quality>12</tt:Quality></tt:VideoEncoderConfiguration>"
-            "<tt:PTZConfiguration token=\"PTZToken\">"
-                "<tt:Name>PTZConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:NodeToken>PTZNodeToken</tt:NodeToken><tt:DefaultContinuousPanTiltVelocitySpace>http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace</tt:DefaultContinuousPanTiltVelocitySpace><tt:DefaultPTZSpeed><tt:PanTilt x=\"1.0\" y=\"1.0\" space=\"http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace\"/></tt:DefaultPTZSpeed></tt:PTZConfiguration>"
-        "</trt:Profiles>"
-    "</trt:GetProfilesResponse>"
-    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
-    sendFixedPROGMEM(onvifServer, TPL_PROFILES);
+     LOG_D("Sending GetProfiles response");
+     
+     char buffer[1800];
+     int len;
+     
+     // ============================================================================
+     // EXPERIMENTAL: Claim H.264 to satisfy Hikvision HVR
+     // The actual RTSP stream is still MJPEG but we tell Hikvision it's H.264
+     // This may allow Hikvision to accept the camera (though video may not display)
+     // To use MJPEG instead: comment out the H.264 section below and uncomment the MJPEG section
+     // ============================================================================
+     
+     // --- H.264 CLAIM (EXPERIMENTAL - for Hikvision HVR compatibility) ---
+     len = snprintf(buffer, sizeof(buffer),
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" "
+        "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+        "<SOAP-ENV:Body>"
+        "<trt:GetProfilesResponse>"
+            "<trt:Profiles token=\"Profile_1\" fixed=\"true\">"
+                "<tt:Name>MainStream</tt:Name>"
+                "<tt:VideoSourceConfiguration token=\"VideoSourceToken\">"
+                    "<tt:Name>VideoSource</tt:Name>"
+                    "<tt:UseCount>1</tt:UseCount>"
+                    "<tt:SourceToken>VideoSource_1</tt:SourceToken>"
+                    "<tt:Bounds x=\"0\" y=\"0\" width=\"640\" height=\"480\"/>"
+                "</tt:VideoSourceConfiguration>"
+                "<tt:VideoEncoderConfiguration token=\"VideoEncoderToken\">"
+                    "<tt:Name>VideoEncoder</tt:Name>"
+                    "<tt:UseCount>1</tt:UseCount>"
+                    "<tt:Encoding>H264</tt:Encoding>"
+                    "<tt:Resolution>"
+                        "<tt:Width>640</tt:Width>"
+                        "<tt:Height>480</tt:Height>"
+                    "</tt:Resolution>"
+                    "<tt:Quality>5</tt:Quality>"
+                    "<tt:RateControl>"
+                        "<tt:FrameRateLimit>20</tt:FrameRateLimit>"
+                        "<tt:EncodingInterval>1</tt:EncodingInterval>"
+                        "<tt:BitrateLimit>2048</tt:BitrateLimit>"
+                    "</tt:RateControl>"
+                    "<tt:H264>"
+                        "<tt:GovLength>30</tt:GovLength>"
+                        "<tt:H264Profile>Baseline</tt:H264Profile>"
+                    "</tt:H264>"
+                    "<tt:Multicast>"
+                        "<tt:Address><tt:Type>IPv4</tt:Type><tt:IPv4Address>0.0.0.0</tt:IPv4Address></tt:Address>"
+                        "<tt:Port>0</tt:Port>"
+                        "<tt:TTL>1</tt:TTL>"
+                        "<tt:AutoStart>false</tt:AutoStart>"
+                    "</tt:Multicast>"
+                    "<tt:SessionTimeout>PT60S</tt:SessionTimeout>"
+                "</tt:VideoEncoderConfiguration>"
+            "</trt:Profiles>"
+        "</trt:GetProfilesResponse>"
+        "</SOAP-ENV:Body>"
+        "</SOAP-ENV:Envelope>");
+     
+     /*
+     // --- MJPEG (ORIGINAL - for NVRs that support MJPEG like Blue Iris, Shinobi) ---
+     len = snprintf(buffer, sizeof(buffer),
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" "
+        "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+        "<SOAP-ENV:Body>"
+        "<trt:GetProfilesResponse>"
+            "<trt:Profiles token=\"Profile_1\" fixed=\"true\">"
+                "<tt:Name>MainStream</tt:Name>"
+                "<tt:VideoSourceConfiguration token=\"VideoSourceToken\">"
+                    "<tt:Name>VideoSource</tt:Name>"
+                    "<tt:UseCount>1</tt:UseCount>"
+                    "<tt:SourceToken>VideoSource_1</tt:SourceToken>"
+                    "<tt:Bounds x=\"0\" y=\"0\" width=\"640\" height=\"480\"/>"
+                "</tt:VideoSourceConfiguration>"
+                "<tt:VideoEncoderConfiguration token=\"VideoEncoderToken\">"
+                    "<tt:Name>VideoEncoder</tt:Name>"
+                    "<tt:UseCount>1</tt:UseCount>"
+                    "<tt:Encoding>JPEG</tt:Encoding>"
+                    "<tt:Resolution>"
+                        "<tt:Width>640</tt:Width>"
+                        "<tt:Height>480</tt:Height>"
+                    "</tt:Resolution>"
+                    "<tt:Quality>5</tt:Quality>"
+                    "<tt:RateControl>"
+                        "<tt:FrameRateLimit>20</tt:FrameRateLimit>"
+                        "<tt:EncodingInterval>1</tt:EncodingInterval>"
+                        "<tt:BitrateLimit>4096</tt:BitrateLimit>"
+                    "</tt:RateControl>"
+                    "<tt:Multicast>"
+                        "<tt:Address><tt:Type>IPv4</tt:Type><tt:IPv4Address>0.0.0.0</tt:IPv4Address></tt:Address>"
+                        "<tt:Port>0</tt:Port>"
+                        "<tt:TTL>1</tt:TTL>"
+                        "<tt:AutoStart>false</tt:AutoStart>"
+                    "</tt:Multicast>"
+                    "<tt:SessionTimeout>PT60S</tt:SessionTimeout>"
+                "</tt:VideoEncoderConfiguration>"
+            "</trt:Profiles>"
+        "</trt:GetProfilesResponse>"
+        "</SOAP-ENV:Body>"
+        "</SOAP-ENV:Envelope>");
+     */
+     
+     if (len > 0 && len < sizeof(buffer)) {
+         onvifServer.send(200, "application/soap+xml", buffer);
+         LOG_D("GetProfiles sent, size: " + String(len));
+     } else {
+         LOG_E("GetProfiles buffer overflow!");
+         onvifServer.send(500, "text/plain", "Buffer overflow");
+     }
+
 
   } else if (req.indexOf("GetVideoSources") > 0) {
     // Inject current Sensor values
@@ -722,9 +1055,26 @@ void handle_onvif_soap() {
   } else if (req.indexOf("GetVideoEncoderConfigurationOptions") > 0) {
     sendFixedPROGMEM(onvifServer, TPL_VIDEO_OPTIONS);
   } else if (req.indexOf("GetVideoEncoderConfiguration") > 0) {
-    sendFixedPROGMEM(onvifServer, TPL_VIDEO_ENCODER_CONFIG);
+    if (req.indexOf("VideoEncoderToken_Sub") > 0) {
+        sendFixedPROGMEM(onvifServer, TPL_VIDEO_ENCODER_CONFIG_SUB);
+    } else {
+        // Default to Main if unspecified or Main
+        sendFixedPROGMEM(onvifServer, TPL_VIDEO_ENCODER_CONFIG_MAIN);
+    }
   } else if (req.indexOf("GetNetworkInterfaces") > 0) {
-    sendDynamicPROGMEM(onvifServer, TPL_NETWORK_INTERFACES, WiFi.macAddress().c_str(), 0); // Port arg ignored
+    // Pass MAC and IP to the template
+    char *buffer = new char[2048];
+    if(buffer) {
+        snprintf_P(buffer, 2048, PART_HEADER); 
+        size_t len = strlen(buffer);
+        snprintf_P(buffer + len, 2048 - len, TPL_NETWORK_INTERFACES, 
+            WiFi.macAddress().c_str(), 
+            WiFi.localIP().toString().c_str());
+        onvifServer.send(200, "application/soap+xml", buffer);
+        delete[] buffer;
+    } else {
+        onvifServer.send(500, "text/plain", "OOM");
+    }
   } else if (req.indexOf("GetAudioEncoderConfigurationOptions") > 0) {
     sendFixedPROGMEM(onvifServer, TPL_AUDIO_OPTIONS); // Return empty options
   } else if (req.indexOf("GetAudioEncoderConfiguration") > 0) {
@@ -734,6 +1084,10 @@ void handle_onvif_soap() {
      sendFixedPROGMEM(onvifServer, TPL_OSD_OPTIONS);
   } else if (req.indexOf("GetVideoAnalyticsConfigurations") > 0) {
      sendFixedPROGMEM(onvifServer, TPL_ANALYTICS_CONFIG);
+  } else if (req.indexOf("GetVideoAnalyticsConfigurations") > 0) {
+     sendFixedPROGMEM(onvifServer, TPL_ANALYTICS_CONFIG);
+  } else if (req.indexOf("GetOptions") > 0 && req.indexOf("VideoSourceToken") > 0) {
+     sendFixedPROGMEM(onvifServer, TPL_IMAGING_OPTIONS);
   } else if (req.indexOf("GetScopes") > 0) {
      const char PROGMEM TPL_SCOPES[] = 
      "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
@@ -754,11 +1108,20 @@ void handle_onvif_soap() {
   } else if (req.indexOf("SetImagingSettings") > 0 || req.indexOf("SetVideoEncoderConfiguration") > 0) {
     // Acknowledge setting commands with OK (we ignore the actual values to enforce stability)
     onvifServer.send(200, "application/soap+xml", "<ok/>"); 
-  } else if (req.indexOf("GetDNS") > 0 || req.indexOf("GetNTP") > 0 || req.indexOf("GetScopes") > 0 || req.indexOf("GetNetworkProtocols") > 0) {
-     // Return empty valid SOAP-ish OK to suppress errors for optional discovery items
-     // Some NVRs retry endlessly if connection closes without response.
-     // Sending a "Generic Response" is better than connection reset.
-     onvifServer.send(200, "application/soap+xml", "<ok/>");
+  } else if (req.indexOf("GetDNS") > 0) {
+     sendFixedPROGMEM(onvifServer, TPL_DNS);
+  } else if (req.indexOf("GetNTP") > 0) {
+     sendFixedPROGMEM(onvifServer, TPL_NTP);
+  } else if (req.indexOf("GetNetworkProtocols") > 0) {
+     sendFixedPROGMEM(onvifServer, TPL_NET_PROTOCOLS);
+  } else if (req.indexOf("GetMoveOptions") > 0) {
+      if (req.indexOf("VideoSourceToken") > 0) {
+          sendFixedPROGMEM(onvifServer, TPL_IMAGING_MOVE_OPTIONS);
+      } else {
+          sendFixedPROGMEM(onvifServer, TPL_MOVE_OPTIONS);
+      }
+  } else if (req.indexOf("SetSynchronizationPoint") > 0) {
+      sendFixedPROGMEM(onvifServer, TPL_SET_SYNC_POINT);
   } else if (req.indexOf("AbsoluteMove") > 0 || req.indexOf("ContinuousMove") > 0 || req.indexOf("Stop") > 0) {
     handle_ptz(req);
     onvifServer.send(200, "application/soap+xml", "<ok/>");
@@ -794,10 +1157,10 @@ void handle_onvif_discovery() {
         "<SOAP-ENV:Body>"
         "<ProbeMatches xmlns=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\">"
         "<ProbeMatch>"
-        "<EndpointReference><Address>urn:uuid:esp32-cam-onvif</Address></EndpointReference>"
+        "<EndpointReference><Address>urn:uuid:esp32-cam-onvif-" + WiFi.macAddress() + "</Address></EndpointReference>"
         "<Types>dn:NetworkVideoTransmitter</Types>"
+        "<Scopes>onvif://www.onvif.org/type/Network_Video_Transmitter onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/location/Office onvif://www.onvif.org/name/" DEVICE_MODEL " onvif://www.onvif.org/hardware/" DEVICE_HARDWARE_ID "</Scopes>"
         "<XAddrs>http://" + ip + ":" + String(ONVIF_PORT) + "/onvif/device_service</XAddrs>"
-        "<Scopes>onvif://www.onvif.org/Profile/Streaming</Scopes>"
         "<MetadataVersion>1</MetadataVersion>"
         "</ProbeMatch>"
         "</ProbeMatches>"
@@ -817,10 +1180,11 @@ void onvif_server_start() {
   onvifServer.on("/onvif/ptz_service", HTTP_POST, handle_onvif_soap); // Route PTZ to same handler for now
   onvifServer.begin();
   onvifUDP.beginMulticast(IPAddress(239,255,255,250), 3702); // Fixed: use only 2 args
-  Serial.println("[INFO] ONVIF server started.");
+  LOG_I("ONVIF server started.");
 }
 
 void onvif_server_loop() {
+  if (!_onvifEnabled) return;
   onvifServer.handleClient();
   handle_onvif_discovery();
 }

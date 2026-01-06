@@ -1,6 +1,7 @@
 #include "CRtspSession.h"
 #include <stdio.h>
 #include <time.h>
+#include "esp_camera.h"
 
 CRtspSession::CRtspSession(SOCKET aRtspClient, CStreamer * aStreamer) : m_RtspClient(aRtspClient),m_Streamer(aStreamer)
 {
@@ -98,7 +99,8 @@ bool CRtspSession::ParseRtspRequest(char const * aRequest, unsigned aRequestSize
     if (strstr(CmdName,"DESCRIBE")  != nullptr) m_RtspCmdType = RTSP_DESCRIBE; else
     if (strstr(CmdName,"SETUP")     != nullptr) m_RtspCmdType = RTSP_SETUP; else
     if (strstr(CmdName,"PLAY")      != nullptr) m_RtspCmdType = RTSP_PLAY; else
-    if (strstr(CmdName,"TEARDOWN")  != nullptr) m_RtspCmdType = RTSP_TEARDOWN;
+    if (strstr(CmdName,"TEARDOWN")  != nullptr) m_RtspCmdType = RTSP_TEARDOWN; else
+    if (strstr(CmdName,"GET_PARAMETER") != nullptr) m_RtspCmdType = RTSP_GET_PARAMETER;
 
     // check whether the request contains transport information (UDP or TCP)
     if (m_RtspCmdType == RTSP_SETUP)
@@ -222,6 +224,7 @@ RTSP_CMD_TYPES CRtspSession::Handle_RtspRequest(char const * aRequest, unsigned 
         case RTSP_DESCRIBE: { Handle_RtspDESCRIBE(); break; };
         case RTSP_SETUP:    { Handle_RtspSETUP();    break; };
         case RTSP_PLAY:     { Handle_RtspPLAY();     break; };
+        case RTSP_GET_PARAMETER: { Handle_RtspGET_PARAMETER(); break; };
         default: {};
         };
     };
@@ -234,7 +237,7 @@ void CRtspSession::Handle_RtspOPTION()
 
     snprintf(Response,sizeof(Response),
              "RTSP/1.0 200 OK\r\nCSeq: %s\r\n"
-             "Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE\r\n\r\n",m_CSeq);
+             "Public: DESCRIBE, SETUP, TEARDOWN, PLAY, GET_PARAMETER\r\n\r\n",m_CSeq);
 
     socketsend(m_RtspClient,Response,strlen(Response));
 }
@@ -247,8 +250,16 @@ void CRtspSession::Handle_RtspDESCRIBE()
 
     // check whether we know a stream with the URL which is requested
     m_StreamID = -1;        // invalid URL
-    if ((strcmp(m_URLPreSuffix,"mjpeg") == 0) && (strcmp(m_URLSuffix,"1") == 0)) m_StreamID = 0; else
-    if ((strcmp(m_URLPreSuffix,"mjpeg") == 0) && (strcmp(m_URLSuffix,"2") == 0)) m_StreamID = 1;
+    
+    // Support both MJPEG and H.264 stream paths
+    if ((strcmp(m_URLPreSuffix,"mjpeg") == 0) && (strcmp(m_URLSuffix,"1") == 0)) m_StreamID = 0;
+    else if ((strcmp(m_URLPreSuffix,"mjpeg") == 0) && (strcmp(m_URLSuffix,"2") == 0)) m_StreamID = 1;
+    else if ((strcmp(m_URLPreSuffix,"h264") == 0) && (strcmp(m_URLSuffix,"1") == 0)) m_StreamID = 2;
+    else if ((strcmp(m_URLPreSuffix,"h264") == 0) && (strcmp(m_URLSuffix,"2") == 0)) m_StreamID = 3;
+    // Also accept just /1 or /2 with no prefix
+    else if (strlen(m_URLPreSuffix) == 0 && strcmp(m_URLSuffix,"1") == 0) m_StreamID = 0;
+    else if (strlen(m_URLPreSuffix) == 0 && strcmp(m_URLSuffix,"2") == 0) m_StreamID = 1;
+    
     if (m_StreamID == -1)
     {   // Stream not available
         snprintf(Response,sizeof(Response),
@@ -264,24 +275,74 @@ void CRtspSession::Handle_RtspDESCRIBE()
     static char OBuf[256];
     char * ColonPtr;
     strcpy(OBuf,m_URLHostPort);
-    ColonPtr = strstr(OBuf,":");
+    ColonPtr = strstr(OBuf,":"); 
     if (ColonPtr != nullptr) ColonPtr[0] = 0x00;
 
-    snprintf(SDPBuf,sizeof(SDPBuf),
-             "v=0\r\n"
-             "o=- %d 1 IN IP4 %s\r\n"
-             "s=\r\n"
-             "t=0 0\r\n"                                       // start / stop - 0 -> unbounded and permanent session
-             "m=video 0 RTP/AVP 26\r\n"                        // currently we just handle UDP sessions
-             // "a=x-dimensions: 640,480\r\n"
-             "c=IN IP4 0.0.0.0\r\n",
-             rand(),
-             OBuf);
+    // Get actual resolution from camera
+    sensor_t * s = esp_camera_sensor_get();
+    int width = 640, height = 480;
+    if (s) {
+        width = 640;  // Default VGA
+        height = 480;
+    }
+    
+    // Determine codec based on stream ID (0-1 = MJPEG, 2-3 = H.264)
+    bool useH264 = (m_StreamID >= 2);
+    
+    if (useH264) {
+        // H.264 SDP (RTP payload type 96 - dynamic)
+        snprintf(SDPBuf,sizeof(SDPBuf),
+                 "v=0\r\n"
+                 "o=- %d 1 IN IP4 %s\r\n"
+                 "s=ESP32-CAM H.264 Stream\r\n"
+                 "i=ESP32 H.264 Video Stream\r\n"
+                 "t=0 0\r\n"
+                 "a=tool:ESP32-CAM RTSP Server\r\n"
+                 "a=type:broadcast\r\n"
+                 "a=control:*\r\n"
+                 "a=range:npt=0-\r\n"
+                 "m=video 0 RTP/AVP 96\r\n"
+                 "c=IN IP4 0.0.0.0\r\n"
+                 "b=AS:2000\r\n"
+                 "a=rtpmap:96 H264/90000\r\n"
+                 "a=fmtp:96 packetization-mode=1;profile-level-id=42E01F\r\n"
+                 "a=framerate:25\r\n"
+                 "a=control:track1\r\n",
+                 rand(),
+                 OBuf);
+    } else {
+        // MJPEG SDP (RTP payload type 26)
+        snprintf(SDPBuf,sizeof(SDPBuf),
+                 "v=0\r\n"
+                 "o=- %d 1 IN IP4 %s\r\n"
+                 "s=ESP32-CAM RTSP Stream\r\n"
+                 "i=ESP32-CAM MJPEG Stream\r\n"
+                 "t=0 0\r\n"
+                 "a=tool:ESP32-CAM RTSP Server\r\n"
+                 "a=type:broadcast\r\n"
+                 "a=control:*\r\n"
+                 "a=range:npt=0-\r\n"
+                 "m=video 0 RTP/AVP 26\r\n"
+                 "c=IN IP4 0.0.0.0\r\n"
+                 "b=AS:4096\r\n"
+                 "a=rtpmap:26 JPEG/90000\r\n"
+                 "a=fmtp:26 width=%d;height=%d;quality=10\r\n"
+                 "a=framerate:20\r\n"
+                 "a=control:track1\r\n",
+                 rand(),
+                 OBuf,
+                 width,
+                 height);
+    }
+    
     char StreamName[64];
     switch (m_StreamID)
     {
     case 0: strcpy(StreamName,"mjpeg/1"); break;
     case 1: strcpy(StreamName,"mjpeg/2"); break;
+    case 2: strcpy(StreamName,"h264/1"); break;
+    case 3: strcpy(StreamName,"h264/2"); break;
+    default: strcpy(StreamName,"1"); break;
     };
     snprintf(URLBuf,sizeof(URLBuf),
              "rtsp://%s/%s",
@@ -330,7 +391,7 @@ void CRtspSession::Handle_RtspSETUP()
              "RTSP/1.0 200 OK\r\nCSeq: %s\r\n"
              "%s\r\n"
              "Transport: %s\r\n"
-             "Session: %i\r\n\r\n",
+             "Session: %i;timeout=60\r\n\r\n",
              m_CSeq,
              DateHeader(),
              Transport,
@@ -343,16 +404,23 @@ void CRtspSession::Handle_RtspPLAY()
 {
     static char Response[1024];
 
-    // simulate SETUP server response
+    // Get IP for dynamic URL construction
+    IPADDRESS clientip;
+    IPPORT clientport;
+    socketpeeraddr(m_RtspClient, &clientip, &clientport);
+    
+    // Hikvision-compatible PLAY response with proper timeout and RTP-Info
     snprintf(Response,sizeof(Response),
              "RTSP/1.0 200 OK\r\nCSeq: %s\r\n"
              "%s\r\n"
              "Range: npt=0.000-\r\n"
-             "Session: %i\r\n"
-             "RTP-Info: url=rtsp://127.0.0.1:8554/mjpeg/1/track1\r\n\r\n",
+             "Session: %i;timeout=60\r\n"
+             "RTP-Info: url=rtsp://%s:%d/mjpeg/1/track1;seq=0;rtptime=0\r\n\r\n",
              m_CSeq,
              DateHeader(),
-             m_RtspSessionID);
+             m_RtspSessionID,
+             m_URLHostPort,
+             554);
 
     socketsend(m_RtspClient,Response,strlen(Response));
 }
@@ -369,6 +437,20 @@ int CRtspSession::GetStreamID()
 {
     return m_StreamID;
 };
+
+void CRtspSession::Handle_RtspGET_PARAMETER()
+{
+    static char Response[1024];
+
+    // GET_PARAMETER response used for Keep-Alive/Heartbeat
+    snprintf(Response,sizeof(Response),
+             "RTSP/1.0 200 OK\r\nCSeq: %s\r\n"
+             "Session: %i\r\n\r\n",
+             m_CSeq,
+             m_RtspSessionID);
+
+    socketsend(m_RtspClient,Response,strlen(Response));
+}
 
 
 
