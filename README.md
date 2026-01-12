@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-ESP32%20|%20ESP32--S3%20|%20ESP32--P4-blue.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-Stable-green.svg)]()
+[![Status](https://img.shields.io/badge/status-Beta-blue.svg)]()
 [![H.264](https://img.shields.io/badge/H.264-ESP32--P4%20|%20S3-orange.svg)]()
 
 ![ESP32-CAM-ONVIF](ESP32-CAM-ONVIF.jpg)
@@ -13,12 +13,17 @@ Transform your affordable ESP32 camera module into a **professional-grade ONVIF 
 
 ---
 
-## ✨ What's New in v1.3
+## ✨ What's New
 
 - 🎯 **Multi-Board Support**: 12+ camera boards from AI-Thinker, M5Stack, TTGO, Freenove, Seeed, and Espressif
 - 🎬 **H.264 Encoding**: Hardware acceleration on ESP32-P4 (30fps @ 1080p) and software encoding on ESP32-S3
 - 🔧 **Improved Hikvision HVR Compatibility**: Fixed RTSP/SDP parameters and session handling
 - 📦 **Board-Specific Pin Configurations**: Automatic pin mapping based on board selection
+
+> [!NOTE]
+> **🚧 Work in Progress:**  
+> ESP32CAM-ONVIF is still evolving! Help make it better and faster-contributions, feedback, and ideas are warmly welcome.  
+> *Star the repo and join the project!*
 
 ---
 
@@ -476,12 +481,20 @@ MIT License
 
 ## 👨‍💻 Credits
 
-**Developed by John Varghese & J0X**
+**Developed by John Varghese (J0X)**
 
 Built on:
 - [Micro-RTSP](https://github.com/geeksville/Micro-RTSP) - RTSP server
 - [ESP32-Camera](https://github.com/espressif/esp32-camera) - Camera driver
 - [esp_h264](https://github.com/espressif/esp-h264-component) - H.264 encoder
+
+---
+
+## 🚧 Currently a work in progress, but I’d appreciate your support! ☺️
+
+[![Buy me a Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/CyberTrinity)
+[![Patreon](https://img.shields.io/badge/Patreon-F96854?style=for-the-badge&logo=patreon&logoColor=white)](https://patreon.com/CyberTrinity)
+[![Sponsor](https://img.shields.io/badge/sponsor-30363D?style=for-the-badge&logo=GitHub-Sponsors&logoColor=#white)](https://github.com/sponsors/John-Varghese-EH)
 
 ---
 
