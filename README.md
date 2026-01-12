@@ -188,77 +188,156 @@ idf.py add-dependency "espressif/esp_h264^1.2.0"
 
 ---
 
-## 🔄 Hikvision HVR Workaround: go2rtc Transcoder
+## 🔄 Some Hikvision HVR: Virtual ONVIF Server
 
-> **Problem**: Hikvision HVRs only support H.264/H.265 streams. The ESP32-CAM (original ESP32) can only produce MJPEG.  
-> **Solution**: Use **go2rtc** as a proxy to transcode MJPEG → H.264 in real-time.
+> **Problem**: Some Hikvision HVRs only support H.264/H.265 via ONVIF protocol. The ESP32-CAM (original ESP32) produces MJPEG which Hikvision cannot decode.  
+> **Solution**: Use **go2rtc** for transcoding + **onvif-server** for proper ONVIF protocol.
 
-### What is go2rtc?
-[go2rtc](https://github.com/AlexxIT/go2rtc) is a lightweight streaming server that can:
-- ✅ Pull MJPEG from ESP32-CAM
-- ✅ Transcode to H.264 in real-time  
-- ✅ Re-stream as RTSP for Hikvision
-- ✅ Run on Windows, Linux, Raspberry Pi, Docker
+### Architecture
 
-### Quick Setup
+```
+ESP32-CAM (MJPEG) → go2rtc (transcode) → onvif-server → Hikvision NVR
+     ↓                    ↓                   ↓
+  Port 554        H.264 @ Port 8554      Port 8081
+```
 
-#### 1. Download go2rtc
-- **Windows**: [go2rtc_win64.zip](https://github.com/AlexxIT/go2rtc/releases)
-- **Linux/Mac**: `curl -L https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_amd64 -o go2rtc && chmod +x go2rtc`
-- **Docker**: `docker run -p 8554:8554 -p 1984:1984 alexxit/go2rtc`
+### What You Need
+- **[go2rtc](https://github.com/AlexxIT/go2rtc)** - Transcodes MJPEG to H.264 and serves RTSP
+- **[onvif-server](https://github.com/daniela-hase/onvif-server)** - Wraps RTSP stream as proper ONVIF device
+- **FFmpeg** - Required by go2rtc for transcoding
 
-#### 2. Create Configuration
+---
+
+### Quick Setup (Windows)
+
+#### Step 1: Install Prerequisites
+
+```powershell
+# Install FFmpeg
+winget install FFmpeg
+
+# Install Node.js (for onvif-server)
+winget install OpenJS.NodeJS.LTS
+```
+
+#### Step 2: Download go2rtc
+
+Download from [go2rtc releases](https://github.com/AlexxIT/go2rtc/releases) and extract to a folder.
+
 Create `go2rtc.yaml` in the same folder:
 
 ```yaml
 streams:
   esp32cam:
-    - rtsp://admin:esp123@[ESP32-IP]:554/mjpeg/1
+    # Transcode MJPEG to H.264 (replace [ESP32-IP] with your camera IP)
+    - ffmpeg:rtsp://admin:esp123@[ESP32-IP]:554/mjpeg/1#video=h264
 
-# Enable RTSP server with transcoding
 rtsp:
   listen: ":8554"
-  default_query: "video=h264"
 
-# Enable API (optional)
 api:
   listen: ":1984"
 ```
 
-Replace `[ESP32-IP]` with your ESP32-CAM's IP address (e.g., `192.168.1.150`).
+#### Step 3: Clone and Setup onvif-server
 
-#### 3. Run go2rtc
-```bash
-./go2rtc -config go2rtc.yaml
+```powershell
+git clone https://github.com/daniela-hase/onvif-server.git
+cd onvif-server
+npm install
 ```
 
-#### 4. Add to Hikvision HVR
+#### Step 4: Find Your MAC Address
+
+```powershell
+Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Select-Object Name, MacAddress
+```
+
+Use the MAC address of your main network adapter (WiFi or Ethernet).
+
+#### Step 5: Create onvif-server config
+
+Create `config.yaml` in the onvif-server folder:
+
+```yaml
+onvif:
+  - mac: XX-XX-XX-XX-XX-XX           # Your MAC address from Step 4
+    ports:
+      server: 8081                    # ONVIF port for Hikvision
+      rtsp: 8554                      # go2rtc RTSP port
+    name: ESP32CAM
+    uuid: 15b21259-77d9-441f-9913-3ccd8a82e430
+    highQuality:
+      rtsp: /esp32cam                 # Stream name from go2rtc
+      width: 640
+      height: 480
+      framerate: 25
+      bitrate: 2048
+      quality: 4
+    lowQuality:
+      rtsp: /esp32cam
+      width: 640
+      height: 480
+      framerate: 25
+      bitrate: 1024
+      quality: 1
+    target:
+      hostname: 127.0.0.1             # go2rtc runs locally
+      ports:
+        rtsp: 8554
+```
+
+#### Step 6: Run Both Services
+
+**Terminal 1 - Start go2rtc:**
+```powershell
+cd path\to\go2rtc
+.\go2rtc.exe
+```
+
+**Terminal 2 - Start onvif-server:**
+```powershell
+cd path\to\onvif-server
+node main.js ./config.yaml
+```
+
+#### Step 7: Add to Hikvision NVR
 
 | Setting | Value |
 |---------|-------|
-| **Protocol** | ONVIF or RTSP |
-| **IP Address** | [PC/Server running go2rtc] |
-| **Port** | 8554 |
-| **URL** | `/esp32cam` |
-| **Full RTSP URL** | `rtsp://[PC-IP]:8554/esp32cam` |
+| **Protocol** | `ONVIF` |
+| **IP Address** | Your PC's IP |
+| **Port** | `8081` |
+| **Username** | `admin` |
+| **Password** | `admin` |
 
-### go2rtc on Raspberry Pi (24/7 Operation)
+---
+
+### Linux/Raspberry Pi Setup
 
 ```bash
-# Install
-wget https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_arm64
-chmod +x go2rtc_linux_arm64
-sudo mv go2rtc_linux_arm64 /usr/local/bin/go2rtc
+# Install dependencies
+sudo apt update
+sudo apt install -y ffmpeg nodejs npm
 
-# Create config
-sudo mkdir -p /etc/go2rtc
-sudo nano /etc/go2rtc/go2rtc.yaml
+# Download go2rtc
+wget https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_amd64
+chmod +x go2rtc_linux_amd64
+sudo mv go2rtc_linux_amd64 /usr/local/bin/go2rtc
 
-# Create systemd service
-sudo nano /etc/systemd/system/go2rtc.service
+# Clone onvif-server
+cd /opt
+sudo git clone https://github.com/daniela-hase/onvif-server.git
+cd onvif-server
+sudo npm install
+
+# Get your MAC address
+ip link show | grep ether
 ```
 
-**Service file** (`/etc/systemd/system/go2rtc.service`):
+**Create systemd services:**
+
+`/etc/systemd/system/go2rtc.service`:
 ```ini
 [Unit]
 Description=go2rtc streaming server
@@ -273,22 +352,38 @@ User=pi
 WantedBy=multi-user.target
 ```
 
-```bash
-# Enable and start
-sudo systemctl enable go2rtc
-sudo systemctl start go2rtc
+`/etc/systemd/system/onvif-server.service`:
+```ini
+[Unit]
+Description=Virtual ONVIF Server
+After=network.target go2rtc.service
+
+[Service]
+WorkingDirectory=/opt/onvif-server
+ExecStart=/usr/bin/node main.js ./config.yaml
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-### Alternative: FFmpeg (Manual)
-
-If you prefer FFmpeg:
 ```bash
-ffmpeg -i rtsp://admin:esp123@[ESP32-IP]:554/mjpeg/1 \
-  -c:v libx264 -preset ultrafast -tune zerolatency \
-  -f rtsp rtsp://localhost:8554/esp32cam
+sudo systemctl enable go2rtc onvif-server
+sudo systemctl start go2rtc onvif-server
 ```
 
----
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| **"Failed to find IP address for MAC"** | Check MAC with `Get-NetAdapter` (Windows) or `ip link show` (Linux) |
+| **Hikvision shows "Offline"** | Ensure both go2rtc and onvif-server are running |
+| **No video stream** | Test RTSP in VLC: `rtsp://localhost:8554/esp32cam` |
+| **FFmpeg not found** | Restart terminal after installing FFmpeg |
+
+
+
 
 ## 🔌 Port Configuration
 
