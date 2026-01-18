@@ -34,14 +34,25 @@ void setup() {
   
   Serial.println("\n\n--- ESP32-CAM STARTING ---");
   
-  // Initialize Watchdog (ESP32 Arduino v3.0+ / IDF v5.x)
-  esp_task_wdt_config_t wdt_config = {
-      .timeout_ms = WDT_TIMEOUT * 1000,
-      .idle_core_mask = (1 << 0) | (1 << 1), // Subscribe idle task on core 0 and 1
-      .trigger_panic = true
-  };
-  esp_task_wdt_init(&wdt_config);
-  esp_task_wdt_add(NULL); // Add current thread
+  // Initialize Watchdog - Version-agnostic code for both v3.x and pre-v3 board managers
+  esp_task_wdt_deinit();                  // ensure a watchdog is not already configured
+  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR == 3  
+    // v3 board manager detected (ESP32 Arduino v3.0+ / IDF v5.x)
+    // Create and initialize the watchdog timer(WDT) configuration structure
+    esp_task_wdt_config_t wdt_config = {
+        .timeout_ms = WDT_TIMEOUT * 1000, // Convert seconds to milliseconds
+        .idle_core_mask = (1 << 0) | (1 << 1), // Subscribe idle task on core 0 and 1
+        .trigger_panic = true             // Enable panic
+    };
+    // Initialize the WDT with the configuration structure
+    esp_task_wdt_init(&wdt_config);       // Pass the pointer to the configuration structure
+    esp_task_wdt_add(NULL);               // Add current thread to WDT watch    
+    esp_task_wdt_reset();                 // reset timer
+  #else
+    // pre v3 board manager assumed (ESP32 Arduino v2.x and earlier)
+    esp_task_wdt_init(WDT_TIMEOUT, true);                      //enable panic so ESP32 restarts
+    esp_task_wdt_add(NULL);                                    //add current thread to WDT watch   
+  #endif
   Serial.println("[INFO] WDT Enabled");
   printBanner();
   
