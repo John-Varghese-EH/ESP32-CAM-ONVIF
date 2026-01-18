@@ -3,6 +3,7 @@
 #define CAM_TASK_STACK_SIZE 16384
 #include "esp_camera.h"
 #include "config.h"
+#include "board_config.h"
 #ifdef PTZ_ENABLED
 #include <ESP32Servo.h>
 Servo panServo;
@@ -13,22 +14,24 @@ bool camera_init() {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
-  config.pin_d0 = 5;
-  config.pin_d1 = 18;
-  config.pin_d2 = 19;
-  config.pin_d3 = 21;
-  config.pin_d4 = 36;
-  config.pin_d5 = 39;
-  config.pin_d6 = 34;
-  config.pin_d7 = 35;
-  config.pin_xclk = 0;
-  config.pin_pclk = 22;
-  config.pin_vsync = 25;
-  config.pin_href = 23;
-  config.pin_sccb_sda = 26;
-  config.pin_sccb_scl = 27;
-  config.pin_pwdn = 32;
-  config.pin_reset = -1;
+  
+  // Use board-specific pin definitions from board_config.h
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sccb_sda = SIOD_GPIO_NUM;
+  config.pin_sccb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
   if(psramFound()){
